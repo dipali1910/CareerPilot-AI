@@ -1,0 +1,651 @@
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+
+const API_BASE_URL = 'http://127.0.0.1:8000'
+const STUDENT_EMAIL = 'student@careerpilot.ai'
+
+function ApplicationTracking() {
+  const navigate = useNavigate()
+
+  const [applications, setApplications] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    fetchApplications()
+  }, [])
+
+  const fetchApplications = async () => {
+    try {
+      setLoading(true)
+      setError('')
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/student/applications?email=${encodeURIComponent(
+          STUDENT_EMAIL
+        )}`
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || 'Unable to load applications.'
+        )
+      }
+
+      setApplications(
+        Array.isArray(data.applications)
+          ? data.applications
+          : []
+      )
+    } catch (err) {
+      console.error('Application tracking error:', err)
+
+      setError(
+        err.message ||
+          'Unable to load your applications.'
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ============================================================
+  // STATUS HELPERS
+  // ============================================================
+
+  const getStatusLabel = (status) => {
+    const normalizedStatus =
+      String(status || 'applied').toLowerCase()
+
+    const labels = {
+      applied: 'Applied',
+      shortlisted: 'Shortlisted',
+      interview: 'Interview',
+      selected: 'Selected',
+      rejected: 'Rejected',
+    }
+
+    return (
+      labels[normalizedStatus] ||
+      'Applied'
+    )
+  }
+
+  const getStatusStep = (status) => {
+    const normalizedStatus =
+      String(status || 'applied').toLowerCase()
+
+    const steps = {
+      applied: 1,
+      shortlisted: 2,
+      interview: 3,
+      selected: 4,
+      rejected: 0,
+    }
+
+    return steps[normalizedStatus] ?? 1
+  }
+
+  const getStatusClasses = (status) => {
+    const normalizedStatus =
+      String(status || 'applied').toLowerCase()
+
+    if (normalizedStatus === 'selected') {
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    }
+
+    if (normalizedStatus === 'rejected') {
+      return 'bg-red-50 text-red-700 border-red-200'
+    }
+
+    if (normalizedStatus === 'interview') {
+      return 'bg-purple-50 text-purple-700 border-purple-200'
+    }
+
+    if (normalizedStatus === 'shortlisted') {
+      return 'bg-amber-50 text-amber-700 border-amber-200'
+    }
+
+    return 'bg-blue-50 text-blue-700 border-blue-200'
+  }
+
+  // ============================================================
+  // FORMAT DATE
+  // ============================================================
+
+  const formatDate = (dateValue) => {
+    if (!dateValue) {
+      return 'Not available'
+    }
+
+    const date = new Date(dateValue)
+
+    if (Number.isNaN(date.getTime())) {
+      return 'Not available'
+    }
+
+    return date.toLocaleDateString(
+      'en-IN',
+      {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      }
+    )
+  }
+
+  // ============================================================
+  // SUMMARY COUNTS
+  // ============================================================
+
+  const counts = {
+    applied: applications.filter(
+      (application) =>
+        String(application.status).toLowerCase() ===
+        'applied'
+    ).length,
+
+    shortlisted: applications.filter(
+      (application) =>
+        String(application.status).toLowerCase() ===
+        'shortlisted'
+    ).length,
+
+    interview: applications.filter(
+      (application) =>
+        String(application.status).toLowerCase() ===
+        'interview'
+    ).length,
+
+    selected: applications.filter(
+      (application) =>
+        String(application.status).toLowerCase() ===
+        'selected'
+    ).length,
+
+    rejected: applications.filter(
+      (application) =>
+        String(application.status).toLowerCase() ===
+        'rejected'
+    ).length,
+  }
+
+  // ============================================================
+  // LOADING
+  // ============================================================
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+
+          <div className="animate-pulse space-y-6">
+
+            <div className="h-8 w-64 rounded bg-slate-200" />
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              {[1, 2, 3, 4, 5].map((item) => (
+                <div
+                  key={item}
+                  className="h-28 rounded-2xl bg-white"
+                />
+              ))}
+            </div>
+
+            <div className="h-64 rounded-2xl bg-white" />
+
+            <div className="h-64 rounded-2xl bg-white" />
+
+          </div>
+
+        </div>
+      </div>
+    )
+  }
+
+  // ============================================================
+  // ERROR
+  // ============================================================
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+
+        <div className="mx-auto flex min-h-screen max-w-lg items-center justify-center px-4">
+
+          <div className="w-full rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm">
+
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-2xl">
+              !
+            </div>
+
+            <h2 className="mb-2 text-xl font-bold text-slate-900">
+              Unable to Load Applications
+            </h2>
+
+            <p className="mb-6 text-sm leading-6 text-slate-600">
+              {error}
+            </p>
+
+            <button
+              type="button"
+              onClick={fetchApplications}
+              className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+            >
+              Try Again
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
+
+      <header className="border-b border-slate-200 bg-white">
+
+        <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+            <div>
+
+              <Link
+                to="/dashboard"
+                className="mb-2 inline-flex items-center text-sm font-medium text-slate-500 transition hover:text-blue-600"
+              >
+                ← Dashboard
+              </Link>
+
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                My Applications
+              </h1>
+
+              <p className="mt-1 text-sm text-slate-600">
+                Track the progress of your job applications.
+              </p>
+
+            </div>
+
+            <button
+              type="button"
+              onClick={fetchApplications}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Refresh
+            </button>
+
+          </div>
+
+        </div>
+
+      </header>
+
+
+      {/* ======================================================
+          MAIN
+      ====================================================== */}
+
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+
+        {/* ====================================================
+            SUMMARY
+        ==================================================== */}
+
+        <section className="mb-8">
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+
+            <SummaryCard
+              label="Applied"
+              count={counts.applied}
+            />
+
+            <SummaryCard
+              label="Shortlisted"
+              count={counts.shortlisted}
+            />
+
+            <SummaryCard
+              label="Interview"
+              count={counts.interview}
+            />
+
+            <SummaryCard
+              label="Selected"
+              count={counts.selected}
+            />
+
+            <SummaryCard
+              label="Rejected"
+              count={counts.rejected}
+            />
+
+          </div>
+
+        </section>
+
+
+        {/* ====================================================
+            EMPTY STATE
+        ==================================================== */}
+
+        {applications.length === 0 ? (
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
+
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 text-2xl">
+              📄
+            </div>
+
+            <h2 className="text-xl font-bold text-slate-900">
+              No Applications Yet
+            </h2>
+
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
+              You have not submitted any job applications yet.
+              Explore placement opportunities and apply to jobs
+              that match your profile.
+            </p>
+
+            <Link
+              to="/placement-opportunities"
+              className="mt-6 inline-flex rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+            >
+              View Opportunities
+            </Link>
+
+          </section>
+
+        ) : (
+
+          /* ==================================================
+             APPLICATION LIST
+          ================================================== */
+
+          <section className="space-y-6">
+
+            {applications.map((application) => {
+
+              const status =
+                String(
+                  application.status || 'applied'
+                ).toLowerCase()
+
+              const currentStep =
+                getStatusStep(status)
+
+              return (
+
+                <article
+                  key={application.id}
+                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+                >
+
+                  {/* =================================================
+                      APPLICATION HEADER
+                  ================================================= */}
+
+                  <div className="border-b border-slate-100 p-5 sm:p-6">
+
+                    <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+
+                      <div>
+
+                        <div className="flex flex-wrap items-center gap-3">
+
+                          <h2 className="text-xl font-bold text-slate-900">
+                            {application.job_title || 'Job'}
+                          </h2>
+
+                          <span
+                            className={`rounded-full border px-3 py-1 text-xs font-semibold ${getStatusClasses(
+                              status
+                            )}`}
+                          >
+                            {getStatusLabel(status)}
+                          </span>
+
+                        </div>
+
+                        <p className="mt-2 text-sm font-medium text-slate-700">
+                          {application.company || 'Company'}
+                        </p>
+
+                        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-500">
+
+                          <span>
+                            📍 {application.location || 'Not specified'}
+                          </span>
+
+                          <span>
+                            💰 {application.salary || 'Not specified'}
+                          </span>
+
+                          <span>
+                            Applied {formatDate(application.applied_at)}
+                          </span>
+
+                        </div>
+
+                      </div>
+
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          navigate(
+                            `/job-match/${application.job_id}`
+                          )
+                        }
+                        className="shrink-0 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+                      >
+                        View Match Details
+                      </button>
+
+                    </div>
+
+                  </div>
+
+
+                  {/* =================================================
+                      STATUS TRACKER
+                  ================================================= */}
+
+                  <div className="p-5 sm:p-6">
+
+                    <h3 className="mb-6 text-sm font-bold uppercase tracking-wide text-slate-500">
+                      Application Progress
+                    </h3>
+
+
+                    {status === 'rejected' ? (
+
+                      <div className="rounded-xl border border-red-100 bg-red-50 p-4">
+
+                        <div className="flex items-start gap-3">
+
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700">
+                            !
+                          </div>
+
+                          <div>
+
+                            <p className="font-semibold text-red-800">
+                              Application Rejected
+                            </p>
+
+                            <p className="mt-1 text-sm text-red-700">
+                              This application is no longer active.
+                            </p>
+
+                          </div>
+
+                        </div>
+
+                      </div>
+
+                    ) : (
+
+                      <div className="relative">
+
+                        {/* Connector */}
+
+                        <div className="absolute left-5 right-5 top-5 hidden h-0.5 bg-slate-200 sm:block" />
+
+                        <div
+                          className="absolute left-5 top-5 hidden h-0.5 bg-blue-600 transition-all sm:block"
+                          style={{
+                            width:
+                              currentStep === 1
+                                ? '0%'
+                                : currentStep === 2
+                                ? '33.33%'
+                                : currentStep === 3
+                                ? '66.66%'
+                                : '100%',
+                          }}
+                        />
+
+
+                        <div className="grid gap-5 sm:grid-cols-4">
+
+                          <StatusStep
+                            number="1"
+                            label="Applied"
+                            active={currentStep >= 1}
+                          />
+
+                          <StatusStep
+                            number="2"
+                            label="Shortlisted"
+                            active={currentStep >= 2}
+                          />
+
+                          <StatusStep
+                            number="3"
+                            label="Interview"
+                            active={currentStep >= 3}
+                          />
+
+                          <StatusStep
+                            number="4"
+                            label="Selected"
+                            active={currentStep >= 4}
+                          />
+
+                        </div>
+
+                      </div>
+
+                    )}
+
+                  </div>
+
+
+                  {/* =================================================
+                      FOOTER
+                  ================================================= */}
+
+                  <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+
+                    <p className="text-sm text-slate-500">
+                      Application status:{' '}
+                      <span className="font-semibold text-slate-700">
+                        {getStatusLabel(status)}
+                      </span>
+                    </p>
+
+                    <Link
+                      to="/placement-opportunities"
+                      className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+                    >
+                      Find More Opportunities →
+                    </Link>
+
+                  </div>
+
+                </article>
+
+              )
+            })}
+
+          </section>
+
+        )}
+
+      </main>
+
+    </div>
+  )
+}
+
+
+// ============================================================
+// SUMMARY CARD
+// ============================================================
+
+function SummaryCard({ label, count }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+
+      <p className="text-sm font-medium text-slate-500">
+        {label}
+      </p>
+
+      <p className="mt-2 text-3xl font-bold text-slate-900">
+        {count}
+      </p>
+
+    </div>
+  )
+}
+
+
+// ============================================================
+// STATUS STEP
+// ============================================================
+
+function StatusStep({
+  number,
+  label,
+  active,
+}) {
+  return (
+    <div className="relative z-10 flex items-center gap-3 sm:flex-col sm:gap-2 sm:text-center">
+
+      <div
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold transition ${
+          active
+            ? 'border-blue-600 bg-blue-600 text-white'
+            : 'border-slate-300 bg-white text-slate-400'
+        }`}
+      >
+        {active ? '✓' : number}
+      </div>
+
+      <span
+        className={`text-sm font-semibold ${
+          active
+            ? 'text-slate-900'
+            : 'text-slate-400'
+        }`}
+      >
+        {label}
+      </span>
+
+    </div>
+  )
+}
+
+export default ApplicationTracking
