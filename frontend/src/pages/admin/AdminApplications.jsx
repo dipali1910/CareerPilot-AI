@@ -172,34 +172,34 @@ function AdminApplications() {
   const statusClasses = (status) => {
     switch (String(status).toLowerCase()) {
       case 'selected':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200'
+        return 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
       case 'rejected':
-        return 'bg-red-50 text-red-700 border-red-200'
+        return 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800'
       case 'interview':
-        return 'bg-purple-50 text-purple-700 border-purple-200'
+        return 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
       case 'shortlisted':
-        return 'bg-amber-50 text-amber-700 border-amber-200'
+        return 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
       default:
-        return 'bg-blue-50 text-blue-700 border-blue-200'
+        return 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200'
     }
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
+    <div className="min-h-screen bg-[var(--page-bg)]">
+      <header className="border-b border-[var(--border-color)] bg-[var(--surface)]">
         <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <Link
                 to="/dashboard"
-                className="text-sm font-medium text-slate-500 hover:text-blue-600"
+                className="text-sm font-medium text-[var(--text-muted)] hover:text-blue-600 dark:text-blue-400"
               >
                 ← Dashboard
               </Link>
-              <h1 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">
+              <h1 className="mt-2 text-2xl font-bold text-[var(--text-primary)] sm:text-3xl">
                 Application Management
               </h1>
-              <p className="mt-1 text-sm text-slate-600">
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">
                 Review student applications and update their placement status.
               </p>
             </div>
@@ -207,7 +207,7 @@ function AdminApplications() {
             <button
               type="button"
               onClick={fetchApplications}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="rounded-xl border border-[var(--border-color)] bg-[var(--surface)] px-4 py-2.5 text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--page-bg)]"
             >
               Refresh
             </button>
@@ -217,13 +217,13 @@ function AdminApplications() {
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {successMessage && (
-          <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          <div className="mb-6 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-300">
             {successMessage}
           </div>
         )}
 
         {error && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mb-6 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300">
             {error}
           </div>
         )}
@@ -237,7 +237,7 @@ function AdminApplications() {
           <SummaryCard label="Rejected" count={counts.rejected} />
         </section>
 
-        <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <section className="mt-8 rounded-2xl border border-[var(--border-color)] bg-[var(--surface)] p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex-1">
               <label className="sr-only" htmlFor="application-search">
@@ -248,7 +248,7 @@ function AdminApplications() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search student, job, company or email..."
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-xl border border-[var(--border-color)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-muted)] focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40"
               />
             </div>
 
@@ -289,15 +289,15 @@ function AdminApplications() {
 
         <section className="mt-6">
           {loading ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+            <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--text-muted)]">
               Loading applications...
             </div>
           ) : filteredApplications.length === 0 ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
-              <h2 className="text-lg font-bold text-slate-900">
+            <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--surface)] p-10 text-center">
+              <h2 className="text-lg font-bold text-[var(--text-primary)]">
                 No applications found
               </h2>
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-[var(--text-muted)]">
                 Try changing the status filter or search term.
               </p>
             </div>
@@ -310,13 +310,13 @@ function AdminApplications() {
                 return (
                   <article
                     key={application.id}
-                    className="rounded-2xl border border-slate-200 bg-white shadow-sm"
+                    className="rounded-2xl border border-[var(--border-color)] bg-[var(--surface)] shadow-sm"
                   >
                     <div className="p-5 sm:p-6">
                       <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-3">
-                            <h2 className="text-xl font-bold text-slate-900">
+                            <h2 className="text-xl font-bold text-[var(--text-primary)]">
                               {application.job_title || 'Job'}
                             </h2>
                             <span
@@ -329,11 +329,11 @@ function AdminApplications() {
                             </span>
                           </div>
 
-                          <p className="mt-2 font-medium text-slate-700">
+                          <p className="mt-2 font-medium text-[var(--text-secondary)]">
                             {application.company || 'Company'}
                           </p>
 
-                          <div className="mt-4 grid gap-3 text-sm text-slate-600 sm:grid-cols-2 lg:grid-cols-3">
+                          <div className="mt-4 grid gap-3 text-sm text-[var(--text-secondary)] sm:grid-cols-2 lg:grid-cols-3">
                             <Info label="Student" value={application.student_name} />
                             <Info label="Email" value={application.student_email} />
                             <Info label="Education" value={application.degree} />
@@ -343,11 +343,11 @@ function AdminApplications() {
                           </div>
 
                           {application.cover_letter && (
-                            <div className="mt-5 rounded-xl bg-slate-50 p-4">
-                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                            <div className="mt-5 rounded-xl bg-[var(--page-bg)] p-4">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                                 Application Message
                               </p>
-                              <p className="mt-2 text-sm leading-6 text-slate-600">
+                              <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
                                 {application.cover_letter}
                               </p>
                             </div>
@@ -357,7 +357,7 @@ function AdminApplications() {
                         <div className="w-full shrink-0 xl:w-64">
                           <label
                             htmlFor={`status-${application.id}`}
-                            className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+                            className="mb-2 block text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]"
                           >
                             Update Status
                           </label>
@@ -372,7 +372,7 @@ function AdminApplications() {
                                 event.target.value
                               )
                             }
-                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="w-full rounded-xl border border-[var(--border-color)] bg-[var(--surface)] px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {STATUS_OPTIONS.map((option) => (
                               <option
@@ -385,7 +385,7 @@ function AdminApplications() {
                           </select>
 
                           {updatingId === application.id && (
-                            <p className="mt-2 text-xs text-blue-600">
+                            <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">
                               Updating status...
                             </p>
                           )}
@@ -405,9 +405,9 @@ function AdminApplications() {
 
 function SummaryCard({ label, count }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-sm font-medium text-slate-500">{label}</p>
-      <p className="mt-2 text-3xl font-bold text-slate-900">{count}</p>
+    <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--surface)] p-5 shadow-sm">
+      <p className="text-sm font-medium text-[var(--text-muted)]">{label}</p>
+      <p className="mt-2 text-3xl font-bold text-[var(--text-primary)]">{count}</p>
     </div>
   )
 }
@@ -420,7 +420,7 @@ function FilterButton({ active, onClick, label }) {
       className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
         active
           ? 'bg-blue-600 text-white'
-          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'
       }`}
     >
       {label}
@@ -431,10 +431,10 @@ function FilterButton({ active, onClick, label }) {
 function Info({ label, value }) {
   return (
     <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+      <p className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
         {label}
       </p>
-      <p className="mt-1 truncate font-medium text-slate-700">
+      <p className="mt-1 truncate font-medium text-[var(--text-secondary)]">
         {value || 'Not available'}
       </p>
     </div>

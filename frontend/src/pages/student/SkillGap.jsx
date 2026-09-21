@@ -1,105 +1,95 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { supabase } from '../../services/supabase'
+
+const API_BASE_URL = 'http://127.0.0.1:8000'
 
 function SkillGap() {
-  const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [data, setData] = useState(null)
 
-  useEffect(() => {
-    fetchSkillGaps()
-  }, [])
-
-  const fetchSkillGaps = async () => {
+  const loadSkillGaps = async () => {
     try {
       setLoading(true)
       setError('')
 
-      const response = await fetch(
-        'http://127.0.0.1:8000/api/student/skill-gaps?email=student%40careerpilot.ai'
-      )
+      // Get the ACTUAL currently logged-in Supabase user.
+      const {
+        data: authData,
+        error: authError,
+      } = await supabase.auth.getUser()
 
-      const result = await response.json()
+      if (authError) {
+        throw new Error(authError.message)
+      }
+
+      const user = authData?.user
+
+      if (!user?.email) {
+        throw new Error('No logged-in student account found.')
+      }
+
+      console.log('SKILL GAP LOGGED-IN USER:', user.email)
+
+      // IMPORTANT:
+      // The email comes directly from the current Supabase session.
+      // There is NO demo email and NO hardcoded student.
+      const response = await fetch(
+        `${API_BASE_URL}/api/student/skill-gaps?email=${encodeURIComponent(
+          user.email
+        )}`
+      )
 
       if (!response.ok) {
         throw new Error(
-          result.detail || 'Unable to load skill gap analysis.'
+          `Skill Gap API failed with status ${response.status}`
+        )
+      }
+
+      const result = await response.json()
+
+      console.log('SKILL GAP API RESPONSE:', result)
+
+      if (result.status !== 'success') {
+        throw new Error(
+          result.detail || 'Unable to load skill gap information.'
         )
       }
 
       setData(result)
     } catch (err) {
-      setError(
-        err.message || 'Unable to load skill gap analysis.'
-      )
+      console.error('SKILL GAP ERROR:', err)
+      setError(err.message || 'Unable to load skill gap information.')
     } finally {
       setLoading(false)
     }
   }
 
-  const getPriorityClasses = (priority) => {
-    switch (priority) {
-      case 'high':
-        return {
-          badge:
-            'border-red-200 bg-red-50 text-red-700',
-          icon:
-            'bg-red-50 text-red-600',
-          bar:
-            'bg-red-500',
-        }
-
-      case 'medium':
-        return {
-          badge:
-            'border-amber-200 bg-amber-50 text-amber-700',
-          icon:
-            'bg-amber-50 text-amber-600',
-          bar:
-            'bg-amber-500',
-        }
-
-      default:
-        return {
-          badge:
-            'border-slate-200 bg-slate-50 text-slate-600',
-          icon:
-            'bg-slate-50 text-slate-500',
-          bar:
-            'bg-slate-400',
-        }
-    }
-  }
-
-  const formatLevel = (level) => {
-    if (!level) return 'Not specified'
-
-    return level.charAt(0).toUpperCase() + level.slice(1)
-  }
+  useEffect(() => {
+    loadSkillGaps()
+  }, [])
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-
-          <div className="animate-pulse space-y-6">
-
-            <div className="h-8 w-64 rounded bg-slate-200" />
-
-            <div className="h-20 w-full rounded-2xl bg-white" />
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="h-28 rounded-2xl bg-white" />
-              <div className="h-28 rounded-2xl bg-white" />
-              <div className="h-28 rounded-2xl bg-white" />
-            </div>
-
-            <div className="h-48 rounded-2xl bg-white" />
-
-            <div className="h-48 rounded-2xl bg-white" />
-
+      <div className="min-h-screen bg-[var(--page-bg)] p-6">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-8">
+            <div className="h-4 w-32 animate-pulse rounded bg-[var(--border-color)]" />
+            <div className="mt-4 h-9 w-72 animate-pulse rounded bg-[var(--border-color)]" />
+            <div className="mt-3 h-5 w-[500px] max-w-full animate-pulse rounded bg-[var(--border-color)]" />
           </div>
 
+          <div className="grid gap-4 md:grid-cols-3">
+            {[1, 2, 3].map((item) => (
+              <div
+                key={item}
+                className="h-28 animate-pulse rounded-2xl bg-[var(--surface)] shadow-sm"
+              />
+            ))}
+          </div>
+
+          <div className="mt-8 h-96 animate-pulse rounded-2xl bg-[var(--surface)] shadow-sm" />
         </div>
       </div>
     )
@@ -107,448 +97,358 @@ function SkillGap() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <div className="mx-auto flex min-h-screen max-w-xl items-center justify-center px-6">
+      <div className="min-h-screen bg-[var(--page-bg)] p-6">
+        <div className="mx-auto max-w-3xl">
+          <Link
+            to="/dashboard"
+            className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300"
+          >
+            ← Back to Dashboard
+          </Link>
 
-          <div className="w-full rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm">
-
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-xl font-bold text-red-600">
-              !
-            </div>
-
-            <h1 className="mt-4 text-xl font-semibold text-slate-900">
+          <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30 p-6">
+            <h1 className="text-xl font-bold text-red-800 dark:text-red-200">
               Unable to load Skill Gap Analysis
             </h1>
 
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-red-700 dark:text-red-300">
               {error}
             </p>
 
             <button
-              onClick={fetchSkillGaps}
-              className="mt-6 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+              onClick={loadSkillGaps}
+              className="mt-5 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
             >
               Try Again
             </button>
-
-            <Link
-              to="/dashboard"
-              className="mt-4 block text-sm font-medium text-blue-600 hover:text-blue-700"
-            >
-              ← Back to Dashboard
-            </Link>
-
           </div>
-
         </div>
       </div>
     )
   }
 
-  const summary = data?.summary || {}
-  const gaps = data?.gaps || []
-  const student = data?.student || {}
+  if (!data) {
+    return null
+  }
+
+  // Everything below comes directly from the API response.
+  const student = data.student || {}
+  const summary = data.summary || {}
+  const gaps = Array.isArray(data.gaps) ? data.gaps : []
+
+  const studentName = student.name || 'Student'
+  const targetRole = student.target_role || 'Target career role'
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[var(--page-bg)] p-4 md:p-6">
+      <div className="mx-auto max-w-7xl">
 
-      {/* ==================================================
-          HEADER
-      ================================================== */}
+        {/* Back */}
+        <Link
+          to="/dashboard"
+          className="inline-flex items-center text-sm font-medium text-[var(--text-secondary)] transition hover:text-blue-600 dark:text-blue-400"
+        >
+          ← Back to Dashboard
+        </Link>
 
-      <header className="border-b border-slate-200 bg-white">
+        {/* Header */}
+        <div className="mt-6">
+          <p className="text-sm font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+            Career Development
+          </p>
 
-        <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-[var(--text-primary)] md:text-4xl">
+            Skill Gap Analysis
+          </h1>
 
-          <Link
-            to="/dashboard"
-            className="text-sm font-medium text-slate-500 hover:text-blue-600"
-          >
-            ← Dashboard
-          </Link>
+          <p className="mt-2 max-w-2xl text-[var(--text-secondary)]">
+            Identify the skills you need to strengthen for your target career.
+          </p>
+        </div>
 
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        {/* Student Context */}
+        <div className="mt-6 rounded-2xl border border-[var(--border-color)] bg-[var(--surface)] p-5 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 
             <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Student
+              </p>
 
-              <h1 className="text-2xl font-bold text-slate-900">
-                Skill Gap Analysis
-              </h1>
+              <h2 className="mt-1 text-xl font-bold text-[var(--text-primary)]">
+                {studentName}
+              </h2>
 
-              <p className="mt-1 text-sm text-slate-500">
-                Identify the skills you need to strengthen for your target career.
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                {student.email || ''}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-blue-50 px-4 py-3 dark:bg-blue-950/40">
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-500 dark:text-blue-400">
+                Target Role
+              </p>
+
+              <p className="mt-1 font-semibold text-blue-900 dark:text-blue-200">
+                {targetRole}
+              </p>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+          <SummaryCard
+            label="Total Skill Gaps"
+            value={summary.total_gaps ?? gaps.length}
+            description="Skills requiring improvement"
+          />
+
+          <SummaryCard
+            label="High Priority"
+            value={summary.high_priority ?? 0}
+            description="Focus on these first"
+            highlight
+          />
+
+          <SummaryCard
+            label="Medium Priority"
+            value={summary.medium_priority ?? 0}
+            description="Improve after high-priority skills"
+          />
+
+        </div>
+
+        {/* Main Section */}
+        <div className="mt-8">
+
+          <div className="mb-5">
+            <h2 className="text-xl font-bold text-[var(--text-primary)]">
+              Skills to Improve
+            </h2>
+
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              These gaps are calculated from your current profile and your
+              selected target role.
+            </p>
+          </div>
+
+          {gaps.length === 0 ? (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30 p-8 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-2xl">
+                ✓
+              </div>
+
+              <h3 className="mt-4 text-lg font-bold text-emerald-900 dark:text-emerald-200">
+                No Skill Gaps Found
+              </h3>
+
+              <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">
+                Your current skills match the requirements for your target
+                career role.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {gaps.map((gap) => {
+                const currentLevel =
+                  gap.current_level ||
+                  gap.current_proficiency ||
+                  'Not specified'
+
+                const requiredLevel =
+                  gap.required_level ||
+                  gap.required_proficiency ||
+                  'Not specified'
+
+                const priority =
+                  gap.priority ||
+                  'medium'
+
+                const normalizedPriority =
+                  String(priority).toLowerCase()
+
+                const isHigh =
+                  normalizedPriority === 'high'
+
+                const isMedium =
+                  normalizedPriority === 'medium'
+
+                return (
+                  <div
+                    key={gap.id || gap.skill}
+                    className="rounded-2xl border border-[var(--border-color)] bg-[var(--surface)] p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md hover:border-blue-200 dark:hover:border-blue-800"
+                  >
+
+                    {/* Top */}
+                    <div className="flex items-start justify-between gap-4">
+
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                          Skill Gap
+                        </p>
+
+                        <h3 className="mt-1 text-xl font-bold text-[var(--text-primary)]">
+                          {gap.skill}
+                        </h3>
+                      </div>
+
+                      <PriorityBadge
+                        priority={normalizedPriority}
+                      />
+
+                    </div>
+
+                    {/* Progress */}
+                    <div className="mt-6">
+
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium text-[var(--text-secondary)]">
+                          Current Level
+                        </span>
+
+                        <span className="font-semibold capitalize text-[var(--text-primary)]">
+                          {currentLevel}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--surface-secondary)]">
+                        <div
+                          className={`h-full rounded-full ${
+                            isHigh
+                              ? 'w-1/3 bg-red-500 dark:bg-red-400'
+                              : isMedium
+                              ? 'w-1/2 bg-amber-500 dark:bg-amber-400'
+                              : 'w-2/3 bg-blue-500 dark:bg-blue-400'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-between text-sm">
+                        <span className="font-medium text-[var(--text-secondary)]">
+                          Required Level
+                        </span>
+
+                        <span className="font-semibold capitalize text-blue-700 dark:text-blue-300">
+                          {requiredLevel}
+                        </span>
+                      </div>
+
+                    </div>
+
+                    {/* Improvement */}
+                    <div className="mt-5 rounded-xl bg-[var(--page-bg)] p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                        Recommended Improvement
+                      </p>
+
+                      <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
+                        Improve from{' '}
+                        <span className="capitalize">
+                          {currentLevel}
+                        </span>{' '}
+                        to{' '}
+                        <span className="capitalize">
+                          {requiredLevel}
+                        </span>
+                      </p>
+                    </div>
+
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Recommended Next Step */}
+        <div className="mt-8 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-700 dark:to-indigo-700 p-6 text-white shadow-lg md:p-8">
+
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+
+            <div className="max-w-2xl">
+
+              <p className="text-sm font-semibold uppercase tracking-wider text-blue-100">
+                Recommended Next Step
+              </p>
+
+              <h2 className="mt-2 text-2xl font-bold">
+                Build your skills through a personalized roadmap
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-blue-100">
+                Your learning roadmap is based on your identified skill gaps
+                and target career role.
               </p>
 
             </div>
 
-            <div className="text-left sm:text-right">
-
-              <p className="text-sm font-semibold text-slate-700">
-                {student.name}
-              </p>
-
-              <p className="text-xs text-slate-400">
-                Target role: {student.target_role}
-              </p>
-
-            </div>
+            <Link
+              to="/roadmap"
+              className="inline-flex shrink-0 items-center justify-center rounded-xl bg-[var(--surface)] px-5 py-3 text-sm font-bold text-blue-700 dark:text-blue-300 shadow-sm transition hover:bg-blue-50"
+            >
+              View Learning Roadmap →
+            </Link>
 
           </div>
 
         </div>
 
-      </header>
-
-
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-
-        {/* ==================================================
-            INTRODUCTION
-        ================================================== */}
-
-        <section className="rounded-2xl border border-blue-100 bg-blue-50 p-6">
-
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white text-xl shadow-sm">
-              🎯
-            </div>
-
-            <div>
-
-              <h2 className="text-lg font-semibold text-slate-900">
-                Your Career Skill Gaps
-              </h2>
-
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-                Based on your current profile and your target role of{' '}
-                <span className="font-semibold text-slate-800">
-                  {student.target_role}
-                </span>
-                , these are the skills you should focus on developing.
-              </p>
-
-            </div>
-
-          </div>
-
-        </section>
-
-
-        {/* ==================================================
-            SUMMARY CARDS
-        ================================================== */}
-
-        <section className="mt-6 grid gap-4 sm:grid-cols-3">
-
-          {/* Total */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-
-            <div className="flex items-center justify-between">
-
-              <div>
-                <p className="text-sm font-medium text-slate-500">
-                  Total Skill Gaps
-                </p>
-
-                <p className="mt-2 text-3xl font-bold text-slate-900">
-                  {summary.total_gaps || 0}
-                </p>
-              </div>
-
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                ✦
-              </div>
-
-            </div>
-
-            <p className="mt-3 text-xs text-slate-400">
-              Skills to strengthen
-            </p>
-
-          </div>
-
-
-          {/* High */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-
-            <div className="flex items-center justify-between">
-
-              <div>
-                <p className="text-sm font-medium text-slate-500">
-                  High Priority
-                </p>
-
-                <p className="mt-2 text-3xl font-bold text-red-600">
-                  {summary.high_priority || 0}
-                </p>
-              </div>
-
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-600">
-                !
-              </div>
-
-            </div>
-
-            <p className="mt-3 text-xs text-slate-400">
-              Focus on these first
-            </p>
-
-          </div>
-
-
-          {/* Medium */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-
-            <div className="flex items-center justify-between">
-
-              <div>
-                <p className="text-sm font-medium text-slate-500">
-                  Medium Priority
-                </p>
-
-                <p className="mt-2 text-3xl font-bold text-amber-600">
-                  {summary.medium_priority || 0}
-                </p>
-              </div>
-
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                •
-              </div>
-
-            </div>
-
-            <p className="mt-3 text-xs text-slate-400">
-              Develop after high priority skills
-            </p>
-
-          </div>
-
-        </section>
-
-
-        {/* ==================================================
-            SKILL GAP LIST
-        ================================================== */}
-
-        <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-
-            <div>
-
-              <h2 className="text-lg font-semibold text-slate-900">
-                Skills to Improve
-              </h2>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Prioritized based on your career requirements.
-              </p>
-
-            </div>
-
-            <button
-              onClick={fetchSkillGaps}
-              className="self-start rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
-            >
-              Refresh
-            </button>
-
-          </div>
-
-
-          {gaps.length === 0 ? (
-
-            <div className="mt-8 rounded-xl border border-emerald-200 bg-emerald-50 p-6 text-center">
-
-              <div className="text-2xl text-emerald-600">
-                ✓
-              </div>
-
-              <h3 className="mt-2 font-semibold text-emerald-800">
-                No Skill Gaps Found
-              </h3>
-
-              <p className="mt-1 text-sm text-emerald-700">
-                Your current skills match your career requirements.
-              </p>
-
-            </div>
-
-          ) : (
-
-            <div className="mt-6 space-y-4">
-
-              {gaps.map((gap) => {
-
-                const styles = getPriorityClasses(
-                  gap.priority
-                )
-
-                return (
-                  <article
-                    key={gap.id || gap.skill_id || gap.skill}
-                    className="rounded-xl border border-slate-200 p-5 transition hover:border-slate-300"
-                  >
-
-                    <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-
-                      {/* Skill */}
-                      <div className="flex min-w-0 flex-1 items-start gap-4">
-
-                        <div
-                          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg ${styles.icon}`}
-                        >
-                          ↑
-                        </div>
-
-                        <div className="min-w-0">
-
-                          <div className="flex flex-wrap items-center gap-2">
-
-                            <h3 className="font-semibold text-slate-900">
-                              {gap.skill}
-                            </h3>
-
-                            <span
-                              className={`rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${styles.badge}`}
-                            >
-                              {gap.priority} priority
-                            </span>
-
-                          </div>
-
-                          <p className="mt-2 text-sm text-slate-500">
-                            Improve from{' '}
-                            <span className="font-medium text-slate-700">
-                              {formatLevel(
-                                gap.current_proficiency
-                              )}
-                            </span>{' '}
-                            to{' '}
-                            <span className="font-medium text-slate-700">
-                              {formatLevel(
-                                gap.required_proficiency
-                              )}
-                            </span>
-                          </p>
-
-                        </div>
-
-                      </div>
-
-
-                      {/* Current → Required */}
-                      <div className="w-full lg:w-80">
-
-                        <div className="flex items-center justify-between text-xs">
-
-                          <span className="font-medium text-slate-500">
-                            Current
-                          </span>
-
-                          <span className="font-medium text-slate-500">
-                            Required
-                          </span>
-
-                        </div>
-
-                        <div className="mt-2 flex items-center gap-3">
-
-                          <span className="min-w-20 text-sm font-medium capitalize text-slate-700">
-                            {formatLevel(
-                              gap.current_proficiency
-                            )}
-                          </span>
-
-                          <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-
-                            <div
-                              className={`h-full rounded-full ${styles.bar}`}
-                              style={{
-                                width:
-                                  gap.current_proficiency ===
-                                  'beginner'
-                                    ? '35%'
-                                    : gap.current_proficiency ===
-                                      'intermediate'
-                                    ? '65%'
-                                    : '90%',
-                              }}
-                            />
-
-                          </div>
-
-                          <span className="min-w-24 text-right text-sm font-semibold capitalize text-slate-700">
-                            {formatLevel(
-                              gap.required_proficiency
-                            )}
-                          </span>
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                  </article>
-                )
-              })}
-
-            </div>
-
-          )}
-
-        </section>
-
-
-        {/* ==================================================
-            RECOMMENDATION
-        ================================================== */}
-
-        {gaps.length > 0 && (
-
-          <section className="mt-6 rounded-2xl border border-violet-100 bg-violet-50 p-6">
-
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-lg shadow-sm">
-                💡
-              </div>
-
-              <div>
-
-                <h2 className="font-semibold text-slate-900">
-                  Recommended Next Step
-                </h2>
-
-                <p className="mt-1 text-sm leading-6 text-slate-600">
-                  Start with your{' '}
-                  <span className="font-semibold text-slate-800">
-                    high-priority
-                  </span>{' '}
-                  skill gaps first. Building these skills can improve
-                  your readiness for your target role.
-                </p>
-
-                <Link
-                  to="/roadmap"
-                  className="mt-4 inline-flex items-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
-                >
-                  View Learning Roadmap →
-                </Link>
-
-              </div>
-
-            </div>
-
-          </section>
-
-        )}
-
-      </main>
-
+      </div>
     </div>
+  )
+}
+
+function SummaryCard({
+  label,
+  value,
+  description,
+  highlight = false,
+}) {
+  return (
+    <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--surface)] p-5 shadow-sm">
+      <p className="text-sm font-medium text-[var(--text-secondary)]">
+        {label}
+      </p>
+
+      <div className="mt-2 flex items-end gap-2">
+        <span
+          className={`text-3xl font-bold ${
+            highlight
+              ? 'text-red-600 dark:text-red-400'
+              : 'text-[var(--text-primary)]'
+          }`}
+        >
+          {value}
+        </span>
+      </div>
+
+      <p className="mt-1 text-xs text-[var(--text-muted)]">
+        {description}
+      </p>
+    </div>
+  )
+}
+
+function PriorityBadge({ priority }) {
+  const styles = {
+    high: 'bg-red-50 text-red-700 dark:text-red-300 border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800',
+    medium: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800',
+    low: 'bg-emerald-50 text-emerald-700 dark:text-emerald-300 border-emerald-200',
+  }
+
+  const style =
+    styles[priority] ||
+    'bg-[var(--surface-secondary)] text-[var(--text-secondary)] border-[var(--border-color)]'
+
+  return (
+    <span
+      className={`rounded-full border px-3 py-1 text-xs font-bold capitalize ${style}`}
+    >
+      {priority} priority
+    </span>
   )
 }
 

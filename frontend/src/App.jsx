@@ -5,6 +5,9 @@ import {
   Navigate,
 } from 'react-router-dom'
 
+// Layout
+import StudentLayout from './layouts/StudentLayout'
+
 // Authentication
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
@@ -20,6 +23,7 @@ import ApplyJob from './pages/student/ApplyJob'
 import ApplicationTracking from './pages/student/ApplicationTracking'
 import SkillGap from './pages/student/SkillGap'
 import Roadmap from './pages/student/Roadmap'
+import ResumeUpload from './pages/student/ResumeUpload'
 
 // Admin
 import AdminApplications from './pages/admin/AdminApplications'
@@ -29,56 +33,139 @@ function App() {
     <BrowserRouter>
       <Routes>
 
-        {/* Default */}
+        {/* =====================================================
+            DEFAULT
+            ===================================================== */}
+
         <Route
           path="/"
           element={<Navigate to="/login" replace />}
         />
 
-        {/* Authentication */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+
+        {/* =====================================================
+            AUTHENTICATION
+            These pages do NOT use the student sidebar.
+            ===================================================== */}
+
+        <Route
+          path="/login"
+          element={<Login />}
+        />
+
+        <Route
+          path="/register"
+          element={<Register />}
+        />
+
         <Route
           path="/forgot-password"
           element={<ForgotPassword />}
         />
 
-        {/* Student */}
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route
-          path="/career-analysis"
-          element={<CareerAnalysis />}
-        />
-        <Route
-          path="/career-recommendations"
-          element={<CareerRecommendations />}
-        />
-        <Route
-          path="/placement-opportunities"
-          element={<PlacementOpportunities />}
-        />
-        <Route
-          path="/job-match/:jobId"
-          element={<JobMatchDetails />}
-        />
-        <Route
-          path="/apply-job/:jobId"
-          element={<ApplyJob />}
-        />
-        <Route
-          path="/application-tracking"
-          element={<ApplicationTracking />}
-        />
-        <Route path="/skill-gap" element={<SkillGap />} />
-        <Route path="/roadmap" element={<Roadmap />} />
 
-        {/* Admin */}
+        {/* =====================================================
+            STUDENT APPLICATION
+            StudentLayout provides:
+            - Sidebar
+            - Navigation
+            - My Resume
+            - Logout
+            ===================================================== */}
+
+        <Route element={<StudentLayout />}>
+
+          {/* Dashboard */}
+
+          <Route
+            path="/dashboard"
+            element={<Dashboard />}
+          />
+
+
+          {/* Career */}
+
+          <Route
+            path="/career-analysis"
+            element={<CareerAnalysis />}
+          />
+
+          <Route
+            path="/career-recommendations"
+            element={<CareerRecommendations />}
+          />
+
+          <Route
+            path="/skill-gap"
+            element={<SkillGap />}
+          />
+
+          <Route
+            path="/roadmap"
+            element={<Roadmap />}
+          />
+
+
+          {/* Placement */}
+
+          <Route
+            path="/placement-opportunities"
+            element={<PlacementOpportunities />}
+          />
+
+          <Route
+            path="/job-match/:jobId"
+            element={<JobMatchDetails />}
+          />
+
+          <Route
+            path="/apply-job/:jobId"
+            element={<ApplyJob />}
+          />
+
+          <Route
+            path="/application-tracking"
+            element={<ApplicationTracking />}
+          />
+
+
+          {/* =================================================
+              RESUME
+
+              New professional navigation:
+              My Resume → /resume
+
+              Existing URL /resume-upload is also kept
+              so the old route does not break.
+              ================================================= */}
+
+          <Route
+            path="/resume"
+            element={<ResumeUpload />}
+          />
+
+          <Route
+            path="/resume-upload"
+            element={<ResumeUpload />}
+          />
+
+        </Route>
+
+
+        {/* =====================================================
+            ADMIN
+            ===================================================== */}
+
         <Route
           path="/admin/applications"
           element={<AdminApplications />}
         />
 
-        {/* Fallback */}
+
+        {/* =====================================================
+            FALLBACK
+            ===================================================== */}
+
         <Route
           path="*"
           element={<Navigate to="/dashboard" replace />}

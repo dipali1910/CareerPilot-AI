@@ -1,7 +1,7 @@
 import os
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client, Client
@@ -112,6 +112,355 @@ def database_test():
             status_code=500,
             detail=str(e)
         )
+
+
+# ============================================================
+# RESUME UPLOAD + STUDENT PROFILE CREATION
+# ============================================================
+
+@app.post("/api/student/resume-upload")
+async def upload_resume(
+    email: str = Form(...),
+    name: str = Form(""),
+    auth_user_id: str = Form(...),
+    file: UploadFile = File(...),
+):
+    """Create/update the application student profile from a PDF resume."""
+    try:
+        email = email.strip().lower()
+        name = name.strip()
+        auth_user_id = auth_user_id.strip()
+
+        if not email or not auth_user_id:
+            raise HTTPException(status_code=400, detail="Email and authenticated user ID are required.")
+
+        filename = (file.filename or "").lower()
+        content_type = (file.content_type or "").lower()
+        if not filename.endswith(".pdf") and content_type != "application/pdf":
+            raise HTTPException(status_code=400, detail="Please upload a PDF resume.")
+
+        file_bytes = await file.read()
+        if not file_bytes:
+            raise HTTPException(status_code=400, detail="The uploaded resume is empty.")
+        if len(file_bytes) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Resume must be 5 MB or smaller.")
+
+        # --------------------------------------------------------
+        # Extract text from PDF
+        # 1) Try the normal PDF text layer first.
+        # 2) If the PDF is scanned/image-based, fall back to OCR.
+        # --------------------------------------------------------
+        try:
+            from io import BytesIO
+            from pypdf import PdfReader
+
+            reader = PdfReader(BytesIO(file_bytes))
+            pages = []
+            for page in reader.pages:
+                pages.append(page.extract_text() or "")
+            resume_text = "\n".join(pages).strip()
+        except Exception as e:
+            resume_text = ""
+
+        # OCR fallback for scanned/image-based PDF resumes.
+        if len(resume_text.strip()) < 30:
+            try:
+                import fitz  # PyMuPDF
+                import pytesseract
+                from PIL import Image
+                import shutil
+
+                # Use the standard Windows installation path explicitly so
+                # the backend does not depend on the shell PATH.
+                tesseract_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+                if os.path.exists(tesseract_path):
+                    pytesseract.pytesseract.tesseract_cmd = tesseract_path
+                else:
+                    detected_tesseract = shutil.which("tesseract")
+                    if detected_tesseract:
+                        pytesseract.pytesseract.tesseract_cmd = detected_tesseract
+                    else:
+                        raise RuntimeError(
+                            "Tesseract OCR was not found. Expected it at "
+                            r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+                        )
+
+                pdf_document = fitz.open(stream=file_bytes, filetype="pdf")
+                ocr_pages = []
+
+                for page in pdf_document:
+                    # Render at a high enough resolution for resume text OCR.
+                    pixmap = page.get_pixmap(matrix=fitz.Matrix(2.5, 2.5), alpha=False)
+                    image = Image.frombytes("RGB", [pixmap.width, pixmap.height], pixmap.samples)
+                    ocr_text = pytesseract.image_to_string(image, config="--psm 6")
+                    if ocr_text.strip():
+                        ocr_pages.append(ocr_text)
+
+                pdf_document.close()
+                ocr_text = "\n".join(ocr_pages).strip()
+
+                # Prefer OCR when it provides more usable text.
+                if len(ocr_text) > len(resume_text):
+                    resume_text = ocr_text
+
+            except Exception as ocr_error:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "This PDF appears to be image-based and OCR could not process it. "
+                        f"Please check the PDF or try another file. ({ocr_error})"
+                    )
+                )
+
+        if len(resume_text.strip()) < 30:
+            raise HTTPException(
+                status_code=400,
+                detail="Could not extract enough text from this PDF. Please upload a clearer PDF resume."
+            )
+
+        text = resume_text.lower()
+
+        # --------------------------------------------------------
+        # Small, deterministic resume parser
+        # --------------------------------------------------------
+        def first_match(patterns, default=None):
+            import re
+            for pattern in patterns:
+                match = re.search(pattern, resume_text, re.IGNORECASE)
+                if match:
+                    return match.group(1).strip()
+            return default
+
+        import re
+
+        detected_name = name
+        if not detected_name:
+            lines = [line.strip() for line in resume_text.splitlines() if line.strip()]
+            for line in lines[:8]:
+                if (
+                    len(line.split()) >= 2
+                    and len(line) <= 60
+                    and not any(ch.isdigit() for ch in line)
+                    and "@" not in line
+                    and not any(word in line.lower() for word in [
+                        "resume", "curriculum", "phone", "email", "linkedin", "github"
+                    ])
+                ):
+                    detected_name = line
+                    break
+        if not detected_name:
+            detected_name = email.split("@")[0].replace(".", " ").replace("_", " ").title()
+
+        graduation_year = first_match([
+            r"graduat(?:ion|e)\s*(?:year)?\s*[:\-]?\s*(20\d{2})",
+            r"passing\s*(?:year)?\s*[:\-]?\s*(20\d{2})",
+           r"(20\d{2})\s*[-–]\s*(?:20\d{2}|present)",
+        ], 2026)
+        try:
+            graduation_year = int(graduation_year)
+        except (TypeError, ValueError):
+            graduation_year = 2026
+
+        cgpa_value = first_match([
+            r"(?:cgpa|c\.g\.p\.a)\s*[:\-]?\s*(\d+(?:\.\d+)?)",
+            r"(?:gpa)\s*[:\-]?\s*(\d+(?:\.\d+)?)",
+        ], None)
+        try:
+            cgpa = float(cgpa_value) if cgpa_value else 0
+        except (TypeError, ValueError):
+            cgpa = 0
+
+        degree = "MCS" if re.search(r"\bm\.?(?:c|cs)\b|master\s+of\s+computer\s+science|mca", text) else None
+        if not degree:
+            if re.search(r"\bmca\b", text):
+                degree = "MCA"
+            elif re.search(r"\bb\.?e\.?\b|\bb\.?tech\.?\b|bachelor\s+of\s+engineering", text):
+                degree = "B.Tech"
+            elif re.search(r"\bbca\b", text):
+                degree = "BCA"
+            elif re.search(r"\bmba\b", text):
+                degree = "MBA"
+            else:
+                degree = "MCS"
+
+        specialization = "Computer Science"
+        if re.search(r"data\s+science", text):
+            specialization = "Data Science"
+        elif re.search(r"artificial\s+intelligence|\bai\b|machine\s+learning|\bml\b", text):
+            specialization = "Artificial Intelligence / Machine Learning"
+        elif re.search(r"information\s+technology|\bit\b", text):
+            specialization = "Information Technology"
+
+        location = first_match([
+            r"(?:location|city|address)\s*[:\-]\s*([^\n,]{2,40})",
+        ], None)
+        if not location:
+            for city in ["Nashik", "Pune", "Mumbai", "Bengaluru", "Bangalore", "Hyderabad", "Nagpur", "Ahmedabad", "Delhi"]:
+                if re.search(r"\b" + re.escape(city.lower()) + r"\b", text):
+                    location = city
+                    break
+        location = location or ""
+
+        role_candidates = [
+            ("AI/ML Engineer", ["machine learning", "artificial intelligence", "deep learning", "ai/ml"]),
+            ("Data Analyst", ["data analyst", "data analysis", "power bi", "tableau"]),
+            ("Backend Developer", ["backend developer", "back-end developer", "fastapi", "django", "node.js", "nodejs"]),
+            ("Java Developer", ["java developer", "spring boot", "spring framework"]),
+            ("Frontend Developer", ["frontend developer", "front-end developer", "react.js", "reactjs", "angular", "html", "css"]),
+            ("Full Stack Developer", ["full stack", "full-stack", "mern", "mean stack"]),
+        ]
+        role_scores = []
+        for role, keywords in role_candidates:
+            score = sum(1 for keyword in keywords if keyword in text)
+            role_scores.append((score, role))
+        role_scores.sort(reverse=True)
+        target_role = role_scores[0][1] if role_scores and role_scores[0][0] > 0 else "Full Stack Developer"
+        career_interest = target_role
+
+        # --------------------------------------------------------
+        # Find or create public users row using Supabase Auth UUID
+        # --------------------------------------------------------
+        user_response = (
+            supabase.table("users")
+            .select("id, name, email, role")
+            .eq("email", email)
+            .limit(1)
+            .execute()
+        )
+
+        user = user_response.data[0] if user_response.data else None
+        user_payload = {
+            "id": auth_user_id,
+            "name": detected_name,
+            "email": email,
+            "role": "student",
+        }
+
+        if user:
+            if str(user.get("id")) != auth_user_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="This email is already linked to another application user."
+                )
+            supabase.table("users").update({
+                "name": detected_name,
+                "role": "student",
+            }).eq("id", auth_user_id).execute()
+        else:
+            supabase.table("users").insert(user_payload).execute()
+
+        # --------------------------------------------------------
+        # Find or create student profile
+        # --------------------------------------------------------
+        student_response = (
+            supabase.table("students")
+            .select("id, user_id")
+            .eq("user_id", auth_user_id)
+            .limit(1)
+            .execute()
+        )
+
+        student_payload = {
+            "user_id": auth_user_id,
+            "degree": degree,
+            "specialization": specialization,
+            "graduation_year": graduation_year,
+            "cgpa": cgpa,
+            "location": location,
+            "target_role": target_role,
+            "career_interest": career_interest,
+        }
+
+        if student_response.data:
+            student_id = student_response.data[0]["id"]
+            (
+                supabase.table("students")
+                .update(student_payload)
+                .eq("id", student_id)
+                .execute()
+            )
+        else:
+            student_insert = supabase.table("students").insert(student_payload).execute()
+            if not student_insert.data:
+                raise HTTPException(status_code=500, detail="Student profile could not be created.")
+            student_id = student_insert.data[0]["id"]
+
+        # --------------------------------------------------------
+        # Detect skills from the resume against existing skill list
+        # --------------------------------------------------------
+        skills_response = supabase.table("skills").select("id, name").execute()
+        existing_skills = skills_response.data or []
+
+        # Replace only this student's skill mappings so re-uploading a resume updates the profile.
+        supabase.table("student_skills").delete().eq("student_id", student_id).execute()
+
+        student_skill_rows = []
+        detected_skill_names = []
+        for skill in existing_skills:
+            skill_name = str(skill.get("name") or "").strip()
+            if not skill_name:
+                continue
+            skill_lower = skill_name.lower()
+            aliases = {
+                "react.js": ["react.js", "reactjs", "react js"],
+                "node.js": ["node.js", "nodejs", "node js"],
+                "fastapi": ["fastapi"],
+                "rest api": ["rest api", "restful api", "rest apis"],
+                "postgresql": ["postgresql", "postgres"],
+                "github": ["github"],
+                "git": ["git"],
+                "artificial intelligence": ["artificial intelligence", "ai"],
+                "generative ai": ["generative ai", "genai", "gen ai"],
+                "machine learning": ["machine learning", "ml"],
+            }
+            needles = aliases.get(skill_lower, [skill_lower])
+            if any(re.search(r"(?<![a-z0-9])" + re.escape(needle) + r"(?![a-z0-9])", text) for needle in needles):
+                proficiency = "intermediate"
+                advanced_markers = [
+                    skill_lower,
+                    f"advanced {skill_lower}",
+                    f"expert {skill_lower}",
+                    f"proficient in {skill_lower}",
+                ]
+                if any(marker in text for marker in advanced_markers):
+                    proficiency = "advanced"
+                elif any(word in text for word in ["beginner", "basic", "familiar with"]):
+                    proficiency = "beginner"
+
+                student_skill_rows.append({
+                    "student_id": student_id,
+                    "skill_id": skill["id"],
+                    "proficiency": proficiency,
+                })
+                detected_skill_names.append(skill_name)
+
+        if student_skill_rows:
+            supabase.table("student_skills").insert(student_skill_rows).execute()
+
+        return {
+            "status": "success",
+            "message": "Resume analyzed and student profile created successfully.",
+            "student": {
+                "id": student_id,
+                "name": detected_name,
+                "email": email,
+                "degree": degree,
+                "specialization": specialization,
+                "graduation_year": graduation_year,
+                "cgpa": cgpa,
+                "location": location,
+                "target_role": target_role,
+                "career_interest": career_interest,
+            },
+            "skills": detected_skill_names,
+            "skill_count": len(detected_skill_names),
+            "resume_text_length": len(resume_text),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================
@@ -2380,7 +2729,6 @@ def get_student_roadmap(email: str):
             )
 
         student = student_response.data[0]
-
         student_id = student["id"]
 
 
@@ -2398,19 +2746,72 @@ def get_student_roadmap(email: str):
         )
 
         if not roadmap_response.data:
-
             raise HTTPException(
                 status_code=404,
                 detail="Learning roadmap not found."
             )
 
         roadmap = roadmap_response.data[0]
-
         roadmap_id = roadmap["id"]
 
 
         # ----------------------------------------------------
-        # 4. Get roadmap items
+        # 4. Personalized roadmap plan
+        # ----------------------------------------------------
+        # These values are based on the student's current
+        # Full Stack Developer skill gaps:
+        # Node.js, REST API and TypeScript.
+        #
+        # Existing roadmap rows are updated instead of creating
+        # duplicate rows. Completion status is preserved.
+        # ----------------------------------------------------
+
+        personalized_plan = {
+            1: {
+                "title": "Node.js Fundamentals",
+                "description": (
+                    "Strengthen your backend foundation by learning "
+                    "Node.js fundamentals, modules, npm, asynchronous "
+                    "programming and basic server development."
+                ),
+                "skill": "Node.js",
+                "duration": "7 days"
+            },
+            2: {
+                "title": "REST API Development",
+                "description": (
+                    "Learn HTTP methods, REST principles, request and "
+                    "response handling, CRUD operations and API error "
+                    "handling. Build a basic REST API."
+                ),
+                "skill": "REST API",
+                "duration": "7 days"
+            },
+            3: {
+                "title": "TypeScript Development",
+                "description": (
+                    "Build TypeScript fundamentals including types, "
+                    "interfaces, functions, objects and using TypeScript "
+                    "with Node.js."
+                ),
+                "skill": "TypeScript",
+                "duration": "7 days"
+            },
+            4: {
+                "title": "Full Stack Placement Project",
+                "description": (
+                    "Build a practical full-stack project using React, "
+                    "Node.js, REST APIs and TypeScript. Prepare the "
+                    "project for GitHub, resume presentation and interviews."
+                ),
+                "skill": "Node.js + REST API + TypeScript",
+                "duration": "9 days"
+            }
+        }
+
+
+        # ----------------------------------------------------
+        # 5. Get roadmap items
         # ----------------------------------------------------
 
         items_response = (
@@ -2423,79 +2824,154 @@ def get_student_roadmap(email: str):
 
         items_data = items_response.data or []
 
-        items = []
-
 
         # ----------------------------------------------------
-        # 5. Process roadmap items
+        # 6. Update existing roadmap items with personalized
+        #    content while preserving completion status.
         # ----------------------------------------------------
 
         for index, item in enumerate(items_data):
 
+            # roadmap_items does not have a week/week_number column.
+            # The roadmap order itself represents Week 1, Week 2, etc.
+            week = index + 1
+
+            plan = personalized_plan.get(week)
+
+            if not plan:
+                continue
+
+            # roadmap_items does not have a skill column.
+            # Store only fields that exist in the database.
+            update_payload = {
+                "title": plan["title"],
+                "description": plan["description"]
+            }
+
+            (
+                supabase
+                .table("roadmap_items")
+                .update(update_payload)
+                .eq("id", item["id"])
+                .eq("roadmap_id", roadmap_id)
+                .execute()
+            )
+
+
+        # ----------------------------------------------------
+        # 7. If the roadmap has no items, create the four
+        #    personalized learning milestones.
+        # ----------------------------------------------------
+
+        if len(items_data) == 0:
+
+            for week, plan in personalized_plan.items():
+
+                (
+                    supabase
+                    .table("roadmap_items")
+                    .insert({
+                        "roadmap_id": roadmap_id,
+                        "title": plan["title"],
+                        "description": plan["description"],
+                        "completed": False
+                    })
+                    .execute()
+                )
+
+
+        # ----------------------------------------------------
+        # 8. Read roadmap items again after personalization
+        # ----------------------------------------------------
+
+        refreshed_items_response = (
+            supabase
+            .table("roadmap_items")
+            .select("*")
+            .eq("roadmap_id", roadmap_id)
+            .execute()
+        )
+
+        refreshed_items = (
+            refreshed_items_response.data or []
+        )
+
+        items = []
+
+
+        # ----------------------------------------------------
+        # 9. Process roadmap items
+        # ----------------------------------------------------
+
+        for index, item in enumerate(refreshed_items):
+
             completed = item.get("completed")
 
             if completed is None:
-                completed = item.get("is_completed", False)
+                completed = item.get(
+                    "is_completed",
+                    False
+                )
 
             completed = bool(completed)
 
+            # roadmap_items does not have a week/week_number column.
+            # Use the stored row order to map each item to a roadmap week.
+            week = index + 1
 
-            week = (
-                item.get("week")
-                or item.get("week_number")
-                or index + 1
-            )
-
+            plan = personalized_plan.get(week)
 
             title = (
                 item.get("title")
                 or item.get("name")
                 or item.get("task")
-                or f"Learning Task {index + 1}"
+                or (
+                    plan["title"]
+                    if plan
+                    else f"Learning Task {index + 1}"
+                )
             )
-
 
             description = (
                 item.get("description")
-                or ""
+                or (
+                    plan["description"]
+                    if plan
+                    else ""
+                )
             )
-
 
             skill = (
                 item.get("skill")
                 or item.get("skill_name")
-                or ""
+                or (
+                    plan["skill"]
+                    if plan
+                    else ""
+                )
             )
 
-
+            # roadmap_items does not have a duration column.
+            # Use the personalized plan to provide duration to the frontend.
             duration = (
-                item.get("duration")
-                or item.get("estimated_duration")
-                or ""
+                plan["duration"]
+                if plan
+                else ""
             )
-
 
             items.append({
-
                 "id": item.get("id"),
-
                 "week": week,
-
                 "title": title,
-
                 "description": description,
-
                 "skill": skill,
-
                 "duration": duration,
-
                 "completed": completed
-
             })
 
 
         # ----------------------------------------------------
-        # 6. Calculate progress
+        # 10. Calculate progress
         # ----------------------------------------------------
 
         total_items = len(items)
@@ -2506,23 +2982,19 @@ def get_student_roadmap(email: str):
             if item["completed"]
         ])
 
-
         if total_items > 0:
-
             progress = round(
                 (
                     completed_items
                     / total_items
                 ) * 100
             )
-
         else:
-
             progress = 0
 
 
         # ----------------------------------------------------
-        # 7. Roadmap information
+        # 11. Roadmap information
         # ----------------------------------------------------
 
         roadmap_title = (
@@ -2530,7 +3002,6 @@ def get_student_roadmap(email: str):
             or roadmap.get("name")
             or "Personalized Learning Roadmap"
         )
-
 
         duration_days = (
             roadmap.get("duration_days")
@@ -2540,71 +3011,46 @@ def get_student_roadmap(email: str):
 
 
         # ----------------------------------------------------
-        # 8. Return response
+        # 12. Return response
         # ----------------------------------------------------
 
         return {
-
             "status": "success",
 
             "student": {
-
                 "id": student_id,
-
                 "name": user["name"],
-
                 "email": user["email"],
-
                 "degree": student["degree"],
-
-                "specialization": student[
-                    "specialization"
-                ],
-
-                "graduation_year": student[
-                    "graduation_year"
-                ],
-
-                "target_role": student[
-                    "target_role"
-                ]
-
+                "specialization": student["specialization"],
+                "graduation_year": student["graduation_year"],
+                "target_role": student["target_role"]
             },
 
             "roadmap": {
-
                 "id": roadmap_id,
-
                 "title": roadmap_title,
-
                 "duration_days": duration_days,
-
                 "total_items": total_items,
-
                 "completed_items": completed_items,
-
                 "progress": progress,
-
                 "items": items
-
             }
-
         }
 
 
     except HTTPException:
-
         raise
 
 
     except Exception as e:
-
         raise HTTPException(
             status_code=500,
             detail=str(e)
         )
 
 # ============================================================
+
 # UPDATE ROADMAP ITEM COMPLETION
 # ============================================================
 
