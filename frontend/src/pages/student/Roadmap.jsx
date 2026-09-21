@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 
-const API_BASE_URL = 'http://127.0.0.1:8000'
+const API_BASE_URL = 'https://careerpilot-ai-backend-3kr1.onrender.com'
 
 
 function Roadmap() {
