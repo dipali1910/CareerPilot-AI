@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 
-const API_BASE_URL = 'https://careerpilot-ai-backend-3kr1.onrender.com'
+const API_BASE_URL = 'https://careerpilot-ai-backend-docker.onrender.com'
 
 export default function ResumeUpload() {
   const navigate = useNavigate()

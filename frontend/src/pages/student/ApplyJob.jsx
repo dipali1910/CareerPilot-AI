@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 
-const API_BASE_URL = 'https://careerpilot-ai-backend-3kr1.onrender.com'
+const API_BASE_URL = 'https://careerpilot-ai-backend-docker.onrender.com'
 
 export default function ApplyJob() {
   const { jobId } = useParams()

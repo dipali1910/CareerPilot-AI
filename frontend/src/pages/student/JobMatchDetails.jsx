@@ -31,7 +31,7 @@ function JobMatchDetails() {
       }
 
       const response = await fetch(
-        `https://careerpilot-ai-backend-3kr1.onrender.com/api/student/job-match/${jobId}?email=${encodeURIComponent(
+        `https://careerpilot-ai-backend-docker.onrender.com/api/student/job-match/${jobId}?email=${encodeURIComponent(
           user.email
         )}`
       )

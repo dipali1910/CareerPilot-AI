@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 
-const API_URL = 'https://careerpilot-ai-backend-3kr1.onrender.com'
+const API_URL = 'https://careerpilot-ai-backend-docker.onrender.com'
 
 function CareerAnalysis() {
   const navigate = useNavigate()
