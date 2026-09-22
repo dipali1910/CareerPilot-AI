@@ -15,10 +15,11 @@ load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-if not SUPABASE_URL or not SUPABASE_KEY:
+if not SUPABASE_URL or not SUPABASE_KEY or not SUPABASE_SERVICE_ROLE_KEY:
     raise RuntimeError(
-        "SUPABASE_URL and SUPABASE_KEY must be configured in backend/.env"
+        "SUPABASE_URL, SUPABASE_KEY and SUPABASE_SERVICE_ROLE_KEY must be configured in the backend environment."
     )
 
 
@@ -29,6 +30,11 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase: Client = create_client(
     SUPABASE_URL,
     SUPABASE_KEY
+)
+
+admin_supabase: Client = create_client(
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY
 )
 
 
@@ -337,7 +343,7 @@ async def upload_resume(
         # Find or create public users row using Supabase Auth UUID
         # --------------------------------------------------------
         user_response = (
-            supabase.table("users")
+            admin_supabase.table("users")
             .select("id, name, email, role")
             .eq("email", email)
             .limit(1)
@@ -358,18 +364,18 @@ async def upload_resume(
                     status_code=409,
                     detail="This email is already linked to another application user."
                 )
-            supabase.table("users").update({
+            admin_supabase.table("users").update({
                 "name": detected_name,
                 "role": "student",
             }).eq("id", auth_user_id).execute()
         else:
-            supabase.table("users").insert(user_payload).execute()
+            admin_supabase.table("users").insert(user_payload).execute()
 
         # --------------------------------------------------------
         # Find or create student profile
         # --------------------------------------------------------
         student_response = (
-            supabase.table("students")
+            admin_supabase.table("students")
             .select("id, user_id")
             .eq("user_id", auth_user_id)
             .limit(1)
@@ -390,13 +396,13 @@ async def upload_resume(
         if student_response.data:
             student_id = student_response.data[0]["id"]
             (
-                supabase.table("students")
+                admin_supabase.table("students")
                 .update(student_payload)
                 .eq("id", student_id)
                 .execute()
             )
         else:
-            student_insert = supabase.table("students").insert(student_payload).execute()
+            student_insert = admin_supabase.table("students").insert(student_payload).execute()
             if not student_insert.data:
                 raise HTTPException(status_code=500, detail="Student profile could not be created.")
             student_id = student_insert.data[0]["id"]
@@ -404,11 +410,11 @@ async def upload_resume(
         # --------------------------------------------------------
         # Detect skills from the resume against existing skill list
         # --------------------------------------------------------
-        skills_response = supabase.table("skills").select("id, name").execute()
+        skills_response = admin_supabase.table("skills").select("id, name").execute()
         existing_skills = skills_response.data or []
 
         # Replace only this student's skill mappings so re-uploading a resume updates the profile.
-        supabase.table("student_skills").delete().eq("student_id", student_id).execute()
+        admin_supabase.table("student_skills").delete().eq("student_id", student_id).execute()
 
         student_skill_rows = []
         detected_skill_names = []
@@ -451,7 +457,7 @@ async def upload_resume(
                 detected_skill_names.append(skill_name)
 
         if student_skill_rows:
-            supabase.table("student_skills").insert(student_skill_rows).execute()
+            admin_supabase.table("student_skills").insert(student_skill_rows).execute()
 
         return {
             "status": "success",
