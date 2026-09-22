@@ -171,19 +171,34 @@ async def upload_resume(
                 from PIL import Image
                 import shutil
 
-                # Use the standard Windows installation path explicitly so
-                # the backend does not depend on the shell PATH.
-                tesseract_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-                if os.path.exists(tesseract_path):
-                    pytesseract.pytesseract.tesseract_cmd = tesseract_path
+                # Resolve Tesseract for both local Windows development
+                # and Linux production environments such as Render.
+                #
+                # Windows: use the standard installation path first.
+                # Linux / Render: find the executable through PATH.
+                if os.name == "nt":
+                    windows_tesseract = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+                    if os.path.exists(windows_tesseract):
+                        pytesseract.pytesseract.tesseract_cmd = windows_tesseract
+                    else:
+                        detected_tesseract = shutil.which("tesseract")
+                        if detected_tesseract:
+                            pytesseract.pytesseract.tesseract_cmd = detected_tesseract
+                        else:
+                            raise RuntimeError(
+                                "Tesseract OCR was not found on Windows. "
+                                r"Expected it at C:\Program Files\Tesseract-OCR\tesseract.exe"
+                            )
                 else:
                     detected_tesseract = shutil.which("tesseract")
+
                     if detected_tesseract:
                         pytesseract.pytesseract.tesseract_cmd = detected_tesseract
                     else:
                         raise RuntimeError(
-                            "Tesseract OCR was not found. Expected it at "
-                            r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+                            "Tesseract OCR is not installed on the production server. "
+                            "Install the tesseract-ocr system package and redeploy the backend."
                         )
 
                 pdf_document = fitz.open(stream=file_bytes, filetype="pdf")
