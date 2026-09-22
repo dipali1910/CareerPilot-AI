@@ -32,10 +32,16 @@ function Register() {
     try {
       setLoading(true)
 
+      // Automatically uses:
+      // Production → https://career-pilot-ai-six-brown.vercel.app
+      // Local → http://localhost:5173
+      const emailRedirectTo = `${window.location.origin}/login`
+
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
         options: {
+          emailRedirectTo,
           data: {
             full_name: fullName.trim(),
             role: 'student',
@@ -49,7 +55,7 @@ function Register() {
 
       if (data?.user && !data.session) {
         setSuccess(
-          'Account created successfully. Please check your email to confirm your account.'
+          'Account created successfully. Please check your email and confirm your email address. After confirmation, you can sign in.'
         )
         return
       }
