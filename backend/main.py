@@ -323,21 +323,155 @@ async def upload_resume(
                     break
         location = location or ""
 
-        role_candidates = [
-            ("AI/ML Engineer", ["machine learning", "artificial intelligence", "deep learning", "ai/ml"]),
-            ("Data Analyst", ["data analyst", "data analysis", "power bi", "tableau"]),
-            ("Backend Developer", ["backend developer", "back-end developer", "fastapi", "django", "node.js", "nodejs"]),
-            ("Java Developer", ["java developer", "spring boot", "spring framework"]),
-            ("Frontend Developer", ["frontend developer", "front-end developer", "react.js", "reactjs", "angular", "html", "css"]),
-            ("Full Stack Developer", ["full stack", "full-stack", "mern", "mean stack"]),
+        
+        # --------------------------------------------------------
+        # Resume role detection
+        # Prefer an explicit job-title headline from the resume.
+        # If no clear title is found, use broad keyword matching.
+        # --------------------------------------------------------
+        role_title_patterns = [
+            r"\b(senior\s+(?:ui\s*/\s*ux|ui\s+ux|ux\s*/\s*ui|ux|ui|product)\s+designer)\b",
+            r"\b((?:ui\s*/\s*ux|ui\s+ux|ux\s*/\s*ui)\s+designer)\b",
+            r"\b(senior\s+product\s+designer)\b",
+            r"\b(product\s+designer)\b",
+            r"\b(ux\s+researcher)\b",
+            r"\b(data\s+scientist)\b",
+            r"\b(machine\s+learning\s+engineer)\b",
+            r"\b(ai\s*/\s*ml\s+engineer)\b",
+            r"\b(data\s+analyst)\b",
+            r"\b(data\s+engineer)\b",
+            r"\b(business\s+analyst)\b",
+            r"\b(software\s+engineer)\b",
+            r"\b(software\s+developer)\b",
+            r"\b(full[\s-]+stack\s+developer)\b",
+            r"\b(front[\s-]+end\s+developer)\b",
+            r"\b(back[\s-]+end\s+developer)\b",
+            r"\b(java\s+developer)\b",
+            r"\b(python\s+developer)\b",
+            r"\b(web\s+developer)\b",
+            r"\b(cloud\s+engineer)\b",
+            r"\b(devops\s+engineer)\b",
+            r"\b(cyber\s+security\s+analyst)\b",
+            r"\b(qa\s+engineer)\b",
+            r"\b(test\s+engineer)\b",
+            r"\b(project\s+manager)\b",
+            r"\b(product\s+manager)\b",
+            r"\b(marketing\s+analyst)\b",
+            r"\b(financial\s+analyst)\b",
         ]
-        role_scores = []
-        for role, keywords in role_candidates:
-            score = sum(1 for keyword in keywords if keyword in text)
-            role_scores.append((score, role))
-        role_scores.sort(reverse=True)
-        target_role = role_scores[0][1] if role_scores and role_scores[0][0] > 0 else "Full Stack Developer"
+
+        target_role = None
+        # Job titles are most likely near the top of a resume. Check the
+        # first 30 non-empty lines before using skills as a fallback.
+        resume_head = "\n".join(
+            line.strip()
+            for line in resume_text.splitlines()
+            if line.strip()
+        ).splitlines()[:30]
+        resume_head_text = "\n".join(resume_head)
+
+        for pattern in role_title_patterns:
+            match = re.search(pattern, resume_head_text, re.IGNORECASE)
+            if match:
+                target_role = re.sub(r"\s+", " ", match.group(1)).strip().title()
+                # Keep common industry acronyms readable.
+                target_role = (
+                    target_role.replace("Ui/Ux", "UI/UX")
+                    .replace("Ux/Ui", "UX/UI")
+                    .replace("Ai/Ml", "AI/ML")
+                    .replace("Qa", "QA")
+                    .replace("Devops", "DevOps")
+                )
+                break
+
+        if not target_role:
+            role_candidates = [
+                ("UI/UX Designer", [
+                    "user experience design", "user interface design",
+                    "ui/ux", "ui ux", "ux/ui", "wireframing",
+                    "prototyping", "usability testing", "figma",
+                ]),
+                ("Data Scientist", [
+                    "data scientist", "predictive modeling",
+                    "statistical modeling", "scikit-learn",
+                    "pandas", "numpy", "jupyter",
+                ]),
+                ("AI/ML Engineer", [
+                    "machine learning", "artificial intelligence",
+                    "deep learning", "ai/ml", "tensorflow", "pytorch",
+                ]),
+                ("Data Analyst", [
+                    "data analyst", "data analysis", "power bi",
+                    "tableau", "data visualization",
+                ]),
+                ("Data Engineer", [
+                    "data engineer", "etl", "data pipeline",
+                    "apache spark", "data warehouse",
+                ]),
+                ("Cybersecurity Analyst", [
+                    "cybersecurity", "cyber security", "penetration testing",
+                    "security analyst", "siem",
+                ]),
+                ("DevOps Engineer", [
+                    "devops", "ci/cd", "docker", "kubernetes",
+                    "infrastructure as code",
+                ]),
+                ("Cloud Engineer", [
+                    "cloud engineer", "aws", "azure", "google cloud",
+                ]),
+                ("Backend Developer", [
+                    "backend developer", "back-end developer",
+                    "fastapi", "django", "express.js",
+                ]),
+                ("Frontend Developer", [
+                    "frontend developer", "front-end developer",
+                    "react.js", "reactjs", "angular", "vue.js",
+                ]),
+                ("Java Developer", [
+                    "java developer", "spring boot", "spring framework",
+                ]),
+                ("Full Stack Developer", [
+                    "full stack", "full-stack", "mern", "mean stack",
+                ]),
+                ("Software Engineer", [
+                    "software engineer", "software development",
+                    "object-oriented programming",
+                ]),
+                ("Business Analyst", [
+                    "business analyst", "business requirements",
+                    "requirements gathering",
+                ]),
+                ("Product Manager", [
+                    "product manager", "product strategy", "product roadmap",
+                ]),
+                ("Project Manager", [
+                    "project manager", "project management",
+                ]),
+            ]
+
+            role_scores = [
+                (sum(1 for keyword in keywords if keyword in text), role)
+                for role, keywords in role_candidates
+            ]
+            role_scores.sort(key=lambda item: item[0], reverse=True)
+
+            if role_scores and role_scores[0][0] > 0:
+                target_role = role_scores[0][1]
+            else:
+                target_role = "Career Preference Not Detected"
+
         career_interest = target_role
+
+        # Extract a stated experience duration for the API response.
+        # This does not assume an experience column exists in the students table.
+        experience_match = re.search(
+            r"(\d+(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)\s+(?:of\s+)?experience",
+            resume_text,
+            re.IGNORECASE,
+        )
+        experience_years = float(experience_match.group(1)) if experience_match else None
+
+
 
         # --------------------------------------------------------
         # Find or create public users row using Supabase Auth UUID
@@ -473,6 +607,7 @@ async def upload_resume(
                 "location": location,
                 "target_role": target_role,
                 "career_interest": career_interest,
+                "experience_years": experience_years,
             },
             "skills": detected_skill_names,
             "skill_count": len(detected_skill_names),
