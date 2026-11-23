@@ -55,7 +55,7 @@ function Register() {
 
       if (data?.user && !data.session) {
         setSuccess(
-          'Account created successfully. Please check your email and confirm your email address. After confirmation, you can sign in.'
+          'Your account was created, but email confirmation is still enabled in Supabase. To allow direct sign-in, turn off Authentication → Sign In / Providers → Email → Confirm email in your Supabase project settings, then register again.'
         )
         return
       }
