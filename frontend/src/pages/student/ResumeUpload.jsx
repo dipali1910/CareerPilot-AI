@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
+import { apiFetch } from '../../services/api'
 
 const API_BASE_URL = 'https://careerpilot-ai-backend-docker.onrender.com'
 
@@ -77,7 +78,7 @@ export default function ResumeUpload() {
       formData.append('name', fullName)
       formData.append('auth_user_id', user.id)
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/api/student/resume-upload`,
         {
           method: 'POST',
