@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { apiFetch } from '../../services/api'
 
 const API_BASE_URL = 'https://careerpilot-ai-backend-docker.onrender.com'
 
@@ -29,7 +30,7 @@ function AdminApplications() {
       setLoading(true)
       setError('')
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/api/admin/applications`
       )
 
@@ -62,7 +63,7 @@ function AdminApplications() {
       setError('')
       setSuccessMessage('')
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/api/admin/applications/${applicationId}/status`,
         {
           method: 'PATCH',

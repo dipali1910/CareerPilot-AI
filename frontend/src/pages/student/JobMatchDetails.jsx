@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
+import { apiFetch } from '../../services/api'
 
 function JobMatchDetails() {
   const { jobId } = useParams()
@@ -30,7 +31,7 @@ function JobMatchDetails() {
         return
       }
 
-      const response = await fetch(
+      const response = await apiFetch(
         `https://careerpilot-ai-backend-docker.onrender.com/api/student/job-match/${jobId}?email=${encodeURIComponent(
           user.email
         )}`

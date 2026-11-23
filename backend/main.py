@@ -1,7 +1,7 @@
 import os
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client, Client
@@ -36,6 +36,88 @@ admin_supabase: Client = create_client(
     SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY
 )
+
+def get_current_user(authorization: str = Header(...)):
+    """Validate the Supabase access token and return its verified user."""
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(status_code=401, detail="A valid Bearer access token is required.")
+
+    try:
+        response = supabase.auth.get_user(token.strip())
+        auth_user = getattr(response, "user", None)
+        if not auth_user:
+            raise HTTPException(status_code=401, detail="Your session is invalid or expired.")
+
+        user_id = getattr(auth_user, "id", None)
+        email = (getattr(auth_user, "email", None) or "").strip().lower()
+        if not user_id or not email:
+            raise HTTPException(status_code=401, detail="The authenticated account is incomplete.")
+
+        return {
+            "id": str(user_id),
+            "email": email,
+            "user_metadata": getattr(auth_user, "user_metadata", {}) or {},
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Unable to verify your Supabase session.")
+
+
+def get_current_admin(current_user: dict = Depends(get_current_user)):
+    """Require an authenticated account with the admin role."""
+    try:
+        result = (
+            admin_supabase.table("users")
+            .select("id, role")
+            .eq("id", current_user["id"])
+            .limit(1)
+            .execute()
+        )
+        if not result.data or str(result.data[0].get("role", "")).lower() != "admin":
+            raise HTTPException(status_code=403, detail="Administrator access is required.")
+        return current_user
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=403, detail="Unable to verify administrator access.")
+
+
+def calculate_readiness_metrics(student: dict, skills: list, projects: list):
+    """Calculate transparent, profile-specific readiness metrics (0-100)."""
+    proficiency_values = {"beginner": 40, "basic": 40, "intermediate": 70, "advanced": 90, "expert": 100}
+    proficiency_scores = [
+        proficiency_values.get(str(item.get("proficiency") or "").lower(), 50)
+        for item in skills
+    ]
+    technical = round(sum(proficiency_scores) / len(proficiency_scores)) if proficiency_scores else 0
+    project_strength = min(100, len(projects) * 25)
+    role_alignment = 100 if (
+        student.get("target_role") and
+        str(student.get("target_role")).strip().lower() not in {"career preference not detected", "not specified"}
+    ) else 25
+    cgpa = student.get("cgpa")
+    try:
+        education = max(0, min(100, round(float(cgpa) * 10))) if cgpa is not None else 0
+    except (TypeError, ValueError):
+        education = 0
+
+    breakdown = {
+        "technical_skills": technical,
+        "project_strength": project_strength,
+        "role_alignment": role_alignment,
+        "interview_readiness": round((technical * 0.6) + (project_strength * 0.4)),
+        "education": education,
+    }
+    overall = round(
+        technical * 0.40 +
+        project_strength * 0.25 +
+        role_alignment * 0.20 +
+        education * 0.15
+    )
+    return max(0, min(100, overall)), breakdown
+
 
 
 # ============================================================
@@ -96,12 +178,12 @@ def health_check():
 # ============================================================
 
 @app.get("/api/db-test")
-def database_test():
+def database_test(current_user: dict = Depends(get_current_admin)):
 
     try:
 
         response = (
-            supabase
+            admin_supabase
             .table("users")
             .select("id, name, email, role")
             .limit(5)
@@ -131,15 +213,17 @@ async def upload_resume(
     name: str = Form(""),
     auth_user_id: str = Form(...),
     file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
 ):
     """Create/update the application student profile from a PDF resume."""
     try:
-        email = email.strip().lower()
-        name = name.strip()
-        auth_user_id = auth_user_id.strip()
-
-        if not email or not auth_user_id:
-            raise HTTPException(status_code=400, detail="Email and authenticated user ID are required.")
+        email = current_user["email"]
+        auth_user_id = current_user["id"]
+        name = (
+            current_user.get("user_metadata", {}).get("full_name")
+            or current_user.get("user_metadata", {}).get("name")
+            or name.strip()
+        )
 
         filename = (file.filename or "").lower()
         content_type = (file.content_type or "").lower()
@@ -255,6 +339,8 @@ async def upload_resume(
 
         import re
 
+        # Use the name the user entered during registration. The resume parser
+        # supplies education, skills and career data, not the account identity.
         detected_name = name
         if not detected_name:
             lines = [line.strip() for line in resume_text.splitlines() if line.strip()]
@@ -625,8 +711,9 @@ async def upload_resume(
 # ============================================================
 
 @app.get("/api/student/dashboard")
-def get_student_dashboard(email: str):
+def get_student_dashboard(email: str, current_user: dict = Depends(get_current_user)):
 
+    email = current_user["email"]
     try:
 
         # ----------------------------------------------------
@@ -634,7 +721,7 @@ def get_student_dashboard(email: str):
         # ----------------------------------------------------
 
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select(
                 "id, name, email, role"
@@ -662,7 +749,7 @@ def get_student_dashboard(email: str):
         # ----------------------------------------------------
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select(
                 "id, degree, specialization, "
@@ -694,7 +781,7 @@ def get_student_dashboard(email: str):
         # ----------------------------------------------------
 
         skills_response = (
-            supabase
+            admin_supabase
             .table("student_skills")
             .select(
                 "id, proficiency, skill_id, "
@@ -732,7 +819,7 @@ def get_student_dashboard(email: str):
         # ----------------------------------------------------
 
         recommendations_response = (
-            supabase
+            admin_supabase
             .table("career_recommendations")
             .select("id")
             .eq(
@@ -747,11 +834,14 @@ def get_student_dashboard(email: str):
         )
 
 
-        # ----------------------------------------------------
-        # Application-defined readiness score
-        # ----------------------------------------------------
-
-        readiness_score = 82
+        projects_response = (
+            admin_supabase.table("projects")
+            .select("id, title")
+            .eq("student_id", student_id)
+            .execute()
+        )
+        projects = projects_response.data or []
+        readiness_score, _ = calculate_readiness_metrics(student, skills, projects)
 
 
         # ----------------------------------------------------
@@ -821,8 +911,9 @@ def get_student_dashboard(email: str):
 # ============================================================
 
 @app.get("/api/student/career-analysis")
-def get_career_analysis(email: str):
+def get_career_analysis(email: str, current_user: dict = Depends(get_current_user)):
 
+    email = current_user["email"]
     try:
 
         # ----------------------------------------------------
@@ -830,7 +921,7 @@ def get_career_analysis(email: str):
         # ----------------------------------------------------
 
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select(
                 "id, name, email, role"
@@ -858,7 +949,7 @@ def get_career_analysis(email: str):
         # ----------------------------------------------------
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select(
                 "id, user_id, degree, specialization, "
@@ -890,7 +981,7 @@ def get_career_analysis(email: str):
         # ----------------------------------------------------
 
         skills_response = (
-            supabase
+            admin_supabase
             .table("student_skills")
             .select(
                 "id, proficiency, skill_id, "
@@ -928,7 +1019,7 @@ def get_career_analysis(email: str):
         # ----------------------------------------------------
 
         projects_response = (
-            supabase
+            admin_supabase
             .table("projects")
             .select(
                 "id, title, description, "
@@ -949,7 +1040,7 @@ def get_career_analysis(email: str):
         # ----------------------------------------------------
 
         recommendations_response = (
-            supabase
+            admin_supabase
             .table("career_recommendations")
             .select(
                 "id, match_score, reason, career_role_id"
@@ -978,7 +1069,7 @@ def get_career_analysis(email: str):
             if career_role_id:
 
                 career_role_response = (
-                    supabase
+                    admin_supabase
                     .table("career_roles")
                     .select("*")
                     .eq(
@@ -1031,7 +1122,7 @@ def get_career_analysis(email: str):
         # ----------------------------------------------------
 
         gaps_response = (
-            supabase
+            admin_supabase
             .table("skill_gaps")
             .select(
                 "id, current_level, required_level, "
@@ -1079,18 +1170,11 @@ def get_career_analysis(email: str):
         # Readiness
         # ----------------------------------------------------
 
-        readiness_score = 82
-
-        readiness_breakdown = {
-
-            "technical_skills": 84,
-
-            "project_strength": 80,
-
-            "role_alignment": 86,
-
-            "interview_readiness": 78
-        }
+        readiness_score, readiness_breakdown = calculate_readiness_metrics(
+            student,
+            skills,
+            projects
+        )
 
 
         # ----------------------------------------------------
@@ -1195,8 +1279,9 @@ def get_career_analysis(email: str):
 # ============================================================
 
 @app.get("/api/student/career-recommendations")
-def get_career_recommendations(email: str):
+def get_career_recommendations(email: str, current_user: dict = Depends(get_current_user)):
 
+    email = current_user["email"]
     try:
 
         # ----------------------------------------------------
@@ -1204,7 +1289,7 @@ def get_career_recommendations(email: str):
         # ----------------------------------------------------
 
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select(
                 "id, name, email, role"
@@ -1232,7 +1317,7 @@ def get_career_recommendations(email: str):
         # ----------------------------------------------------
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select(
                 "id, degree, specialization, "
@@ -1267,7 +1352,7 @@ def get_career_recommendations(email: str):
         # We need it for the Strengths section.
 
         skills_response = (
-            supabase
+            admin_supabase
             .table("student_skills")
             .select(
                 "id, proficiency, skill_id, "
@@ -1311,7 +1396,7 @@ def get_career_recommendations(email: str):
         # ----------------------------------------------------
 
         gaps_response = (
-            supabase
+            admin_supabase
             .table("skill_gaps")
             .select(
                 "id, current_level, required_level, "
@@ -1358,7 +1443,7 @@ def get_career_recommendations(email: str):
         # ----------------------------------------------------
 
         recommendations_response = (
-            supabase
+            admin_supabase
             .table("career_recommendations")
             .select(
                 "id, match_score, reason, "
@@ -1398,7 +1483,7 @@ def get_career_recommendations(email: str):
             if career_role_id:
 
                 career_role_response = (
-                    supabase
+                    admin_supabase
                     .table("career_roles")
                     .select("*")
                     .eq(
@@ -1590,8 +1675,9 @@ def get_career_recommendations(email: str):
 # ============================================================
 
 @app.get("/api/student/placement-opportunities")
-def get_placement_opportunities(email: str):
+def get_placement_opportunities(email: str, current_user: dict = Depends(get_current_user)):
 
+    email = current_user["email"]
     try:
 
         # ----------------------------------------------------
@@ -1599,7 +1685,7 @@ def get_placement_opportunities(email: str):
         # ----------------------------------------------------
 
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select(
                 "id, name, email, role"
@@ -1627,7 +1713,7 @@ def get_placement_opportunities(email: str):
         # ----------------------------------------------------
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select(
                 "id, degree, specialization, "
@@ -1659,7 +1745,7 @@ def get_placement_opportunities(email: str):
         # ----------------------------------------------------
 
         student_skills_response = (
-            supabase
+            admin_supabase
             .table("student_skills")
             .select(
                 "skill_id, proficiency, "
@@ -1698,7 +1784,7 @@ def get_placement_opportunities(email: str):
         # ----------------------------------------------------
 
         jobs_response = (
-            supabase
+            admin_supabase
             .table("jobs")
             .select("*")
             .order(
@@ -1735,7 +1821,7 @@ def get_placement_opportunities(email: str):
             if company_id:
 
                 company_response = (
-                    supabase
+                    admin_supabase
                     .table("companies")
                     .select("*")
                     .eq(
@@ -1764,7 +1850,7 @@ def get_placement_opportunities(email: str):
             # ------------------------------------------------
 
             required_skills_response = (
-                supabase
+                admin_supabase
                 .table("job_required_skills")
                 .select(
                     "skill_id, required_proficiency, "
@@ -2131,9 +2217,11 @@ def get_placement_opportunities(email: str):
 @app.get("/api/student/job-match/{job_id}")
 def get_job_match_details(
     job_id: str,
-    email: str
+    email: str,
+    current_user: dict = Depends(get_current_user)
 ):
 
+    email = current_user["email"]
     try:
 
         # ----------------------------------------------------
@@ -2141,7 +2229,7 @@ def get_job_match_details(
         # ----------------------------------------------------
 
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select("id, name, email, role")
             .eq("email", email)
@@ -2163,7 +2251,7 @@ def get_job_match_details(
         # ----------------------------------------------------
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select(
                 "id, degree, specialization, "
@@ -2190,7 +2278,7 @@ def get_job_match_details(
         # ----------------------------------------------------
 
         job_response = (
-            supabase
+            admin_supabase
             .table("jobs")
             .select("*")
             .eq("id", job_id)
@@ -2218,7 +2306,7 @@ def get_job_match_details(
         if company_id:
 
             company_response = (
-                supabase
+                admin_supabase
                 .table("companies")
                 .select("*")
                 .eq("id", company_id)
@@ -2242,7 +2330,7 @@ def get_job_match_details(
         # ----------------------------------------------------
 
         student_skills_response = (
-            supabase
+            admin_supabase
             .table("student_skills")
             .select(
                 "skill_id, proficiency, "
@@ -2270,7 +2358,7 @@ def get_job_match_details(
         # ----------------------------------------------------
 
         required_skills_response = (
-            supabase
+            admin_supabase
             .table("job_required_skills")
             .select(
                 "skill_id, required_proficiency, "
@@ -2547,8 +2635,9 @@ def get_job_match_details(
 # ============================================================
 
 @app.get("/api/student/skill-gaps")
-def get_skill_gaps(email: str):
+def get_skill_gaps(email: str, current_user: dict = Depends(get_current_user)):
 
+    email = current_user["email"]
     try:
 
         # ----------------------------------------------------
@@ -2556,7 +2645,7 @@ def get_skill_gaps(email: str):
         # ----------------------------------------------------
 
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select("id, name, email, role")
             .eq("email", email)
@@ -2579,7 +2668,7 @@ def get_skill_gaps(email: str):
         # ----------------------------------------------------
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select(
                 "id, degree, specialization, "
@@ -2608,7 +2697,7 @@ def get_skill_gaps(email: str):
         # ----------------------------------------------------
 
         gaps_response = (
-            supabase
+            admin_supabase
             .table("skill_gaps")
             .select("*")
             .eq("student_id", student_id)
@@ -2637,7 +2726,7 @@ def get_skill_gaps(email: str):
             if skill_id:
 
                 skill_response = (
-                    supabase
+                    admin_supabase
                     .table("skills")
                     .select("id, name")
                     .eq("id", skill_id)
@@ -2836,8 +2925,9 @@ def get_skill_gaps(email: str):
 # ============================================================
 
 @app.get("/api/student/roadmap")
-def get_student_roadmap(email: str):
+def get_student_roadmap(email: str, current_user: dict = Depends(get_current_user)):
 
+    email = current_user["email"]
     try:
 
         # ----------------------------------------------------
@@ -2845,7 +2935,7 @@ def get_student_roadmap(email: str):
         # ----------------------------------------------------
 
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select("id, name, email, role")
             .eq("email", email)
@@ -2867,7 +2957,7 @@ def get_student_roadmap(email: str):
         # ----------------------------------------------------
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select(
                 "id, degree, specialization, "
@@ -2894,7 +2984,7 @@ def get_student_roadmap(email: str):
         # ----------------------------------------------------
 
         roadmap_response = (
-            supabase
+            admin_supabase
             .table("roadmaps")
             .select("*")
             .eq("student_id", student_id)
@@ -2972,7 +3062,7 @@ def get_student_roadmap(email: str):
         # ----------------------------------------------------
 
         items_response = (
-            supabase
+            admin_supabase
             .table("roadmap_items")
             .select("*")
             .eq("roadmap_id", roadmap_id)
@@ -3006,7 +3096,7 @@ def get_student_roadmap(email: str):
             }
 
             (
-                supabase
+                admin_supabase
                 .table("roadmap_items")
                 .update(update_payload)
                 .eq("id", item["id"])
@@ -3025,7 +3115,7 @@ def get_student_roadmap(email: str):
             for week, plan in personalized_plan.items():
 
                 (
-                    supabase
+                    admin_supabase
                     .table("roadmap_items")
                     .insert({
                         "roadmap_id": roadmap_id,
@@ -3042,7 +3132,7 @@ def get_student_roadmap(email: str):
         # ----------------------------------------------------
 
         refreshed_items_response = (
-            supabase
+            admin_supabase
             .table("roadmap_items")
             .select("*")
             .eq("roadmap_id", roadmap_id)
@@ -3219,11 +3309,13 @@ class RoadmapItemCompletion(BaseModel):
 
 @app.patch("/api/student/roadmap-item")
 def update_roadmap_item_completion(
-    request: RoadmapItemCompletion
+    request: RoadmapItemCompletion,
+    current_user: dict = Depends(get_current_user)
 ):
+    request.email = current_user["email"]
     try:
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select("id, email, role")
             .eq("email", request.email)
@@ -3240,7 +3332,7 @@ def update_roadmap_item_completion(
         user = user_response.data[0]
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select("id")
             .eq("user_id", user["id"])
@@ -3257,7 +3349,7 @@ def update_roadmap_item_completion(
         student_id = student_response.data[0]["id"]
 
         roadmap_response = (
-            supabase
+            admin_supabase
             .table("roadmaps")
             .select("id")
             .eq("student_id", student_id)
@@ -3274,7 +3366,7 @@ def update_roadmap_item_completion(
         roadmap_id = roadmap_response.data[0]["id"]
 
         item_response = (
-            supabase
+            admin_supabase
             .table("roadmap_items")
             .select("id, roadmap_id")
             .eq("id", request.item_id)
@@ -3290,7 +3382,7 @@ def update_roadmap_item_completion(
             )
 
         update_response = (
-            supabase
+            admin_supabase
             .table("roadmap_items")
             .update({"completed": request.completed})
             .eq("id", request.item_id)
@@ -3336,11 +3428,13 @@ class JobApplicationRequest(BaseModel):
 
 @app.post("/api/student/applications")
 def create_student_application(
-    request: JobApplicationRequest
+    request: JobApplicationRequest,
+    current_user: dict = Depends(get_current_user)
 ):
+    request.email = current_user["email"]
     try:
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select("id, name, email, role")
             .eq("email", request.email)
@@ -3357,7 +3451,7 @@ def create_student_application(
         user = user_response.data[0]
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select(
                 "id, degree, specialization, "
@@ -3379,7 +3473,7 @@ def create_student_application(
         student_id = student["id"]
 
         job_response = (
-            supabase
+            admin_supabase
             .table("jobs")
             .select("*")
             .eq("id", request.job_id)
@@ -3396,7 +3490,7 @@ def create_student_application(
         job = job_response.data[0]
 
         existing_application_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .select("id, status, applied_at")
             .eq("student_id", student_id)
@@ -3420,7 +3514,7 @@ def create_student_application(
         }
 
         application_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .insert(application_data)
             .execute()
@@ -3467,10 +3561,11 @@ def create_student_application(
 
 
 @app.get("/api/student/applications")
-def get_student_applications(email: str):
+def get_student_applications(email: str, current_user: dict = Depends(get_current_user)):
+    email = current_user["email"]
     try:
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select("id, name, email, role")
             .eq("email", email)
@@ -3487,7 +3582,7 @@ def get_student_applications(email: str):
         user = user_response.data[0]
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select("id")
             .eq("user_id", user["id"])
@@ -3506,7 +3601,7 @@ def get_student_applications(email: str):
         # Do not order by created_at because the applications
         # table does not contain that column.
         applications_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .select("*")
             .eq("student_id", student_id)
@@ -3522,7 +3617,7 @@ def get_student_applications(email: str):
 
             if job_id:
                 job_response = (
-                    supabase
+                    admin_supabase
                     .table("jobs")
                     .select("*")
                     .eq("id", job_id)
@@ -3537,7 +3632,7 @@ def get_student_applications(email: str):
 
             if job and job.get("company_id"):
                 company_response = (
-                    supabase
+                    admin_supabase
                     .table("companies")
                     .select("*")
                     .eq("id", job["company_id"])
@@ -3625,10 +3720,10 @@ ADMIN_APPLICATION_STATUSES = {
 
 
 @app.get("/api/admin/applications")
-def get_admin_applications():
+def get_admin_applications(current_user: dict = Depends(get_current_admin)):
     try:
         applications_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .select("*")
             .execute()
@@ -3648,7 +3743,7 @@ def get_admin_applications():
 
             if student_id:
                 student_response = (
-                    supabase
+                    admin_supabase
                     .table("students")
                     .select("*")
                     .eq("id", student_id)
@@ -3661,7 +3756,7 @@ def get_admin_applications():
                     user_id = student.get("user_id")
                     if user_id:
                         user_response = (
-                            supabase
+                            admin_supabase
                             .table("users")
                             .select("id, name, email, role")
                             .eq("id", user_id)
@@ -3673,7 +3768,7 @@ def get_admin_applications():
 
             if job_id:
                 job_response = (
-                    supabase
+                    admin_supabase
                     .table("jobs")
                     .select("*")
                     .eq("id", job_id)
@@ -3686,7 +3781,7 @@ def get_admin_applications():
                     company_id = job.get("company_id")
                     if company_id:
                         company_response = (
-                            supabase
+                            admin_supabase
                             .table("companies")
                             .select("*")
                             .eq("id", company_id)
@@ -3767,6 +3862,7 @@ def get_admin_applications():
 def update_admin_application_status(
     application_id: str,
     request: ApplicationStatusUpdate,
+    current_user: dict = Depends(get_current_admin),
 ):
     try:
         new_status = request.status.strip().lower()
@@ -3781,7 +3877,7 @@ def update_admin_application_status(
             )
 
         existing_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .select("id, status")
             .eq("id", application_id)
@@ -3796,7 +3892,7 @@ def update_admin_application_status(
             )
 
         update_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .update({"status": new_status})
             .eq("id", application_id)

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
+import { apiFetch } from '../../services/api'
 
 const API_BASE_URL = 'https://careerpilot-ai-backend-docker.onrender.com'
 
@@ -55,7 +56,7 @@ export default function ApplyJob() {
       // ---------------------------------------------------------
       // 2. Get the student's actual profile from backend
       // ---------------------------------------------------------
-      const profileResponse = await fetch(
+      const profileResponse = await apiFetch(
         `${API_BASE_URL}/api/student/dashboard?email=${encodeURIComponent(
           email
         )}`
@@ -98,7 +99,7 @@ export default function ApplyJob() {
       // ---------------------------------------------------------
       // 4. Get job details
       // ---------------------------------------------------------
-      const jobResponse = await fetch(
+      const jobResponse = await apiFetch(
         `${API_BASE_URL}/api/student/job-match/${jobId}?email=${encodeURIComponent(
           email
         )}`
@@ -133,7 +134,7 @@ export default function ApplyJob() {
       // ---------------------------------------------------------
       // 5. Get CURRENT student's applications
       // ---------------------------------------------------------
-      const applicationsResponse = await fetch(
+      const applicationsResponse = await apiFetch(
         `${API_BASE_URL}/api/student/applications?email=${encodeURIComponent(
           email
         )}`
@@ -245,7 +246,7 @@ export default function ApplyJob() {
       // -------------------------------------------------------
       // Submit application
       // -------------------------------------------------------
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/api/student/applications`,
         {
           method: 'POST',

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
+import { apiFetch } from '../../services/api'
 
 const API_BASE_URL = 'https://careerpilot-ai-backend-docker.onrender.com'
 
@@ -16,7 +17,7 @@ async function fetchJson(path, fallback = null, retries = 2) {
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
-      const response = await fetch(`${API_BASE_URL}${path}`)
+      const response = await apiFetch(`${API_BASE_URL}${path}`)
 
       if (!response.ok) {
         throw new Error(
@@ -94,18 +95,23 @@ function Dashboard() {
          * This is the only API that is required for the
          * Dashboard itself to load.
          */
-        const dashboardData = await fetchJson(
-          `/api/student/dashboard?email=${encodedEmail}`,
-          null,
-          3
+        const dashboardResponse = await apiFetch(
+          `${API_BASE_URL}/api/student/dashboard?email=${encodedEmail}`
         )
 
+        if (dashboardResponse.status === 404) {
+          // A new account has no student profile until its own resume is uploaded.
+          navigate('/resume-upload')
+          return
+        }
 
-        if (!dashboardData) {
+        const dashboardPayload = await dashboardResponse.json().catch(() => ({}))
+        if (!dashboardResponse.ok) {
           throw new Error(
-            'Unable to connect to the CareerPilot AI backend.'
+            dashboardPayload.detail || 'Unable to load your student dashboard.'
           )
         }
+        const dashboardData = dashboardPayload
 
 
         if (!isMounted) {
