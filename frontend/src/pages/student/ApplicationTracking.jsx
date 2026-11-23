@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
+import { apiFetch } from '../../services/api'
 
 const API_BASE_URL = 'https://careerpilot-ai-backend-docker.onrender.com'
 
@@ -30,7 +31,7 @@ function ApplicationTracking() {
         return
       }
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/api/student/applications?email=${encodeURIComponent(
           user.email
         )}`
