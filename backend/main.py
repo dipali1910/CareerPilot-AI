@@ -183,7 +183,7 @@ def database_test(current_user: dict = Depends(get_current_admin)):
     try:
 
         response = (
-            supabase
+            admin_supabase
             .table("users")
             .select("id, name, email, role")
             .limit(5)
@@ -721,7 +721,7 @@ def get_student_dashboard(email: str, current_user: dict = Depends(get_current_u
         # ----------------------------------------------------
 
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select(
                 "id, name, email, role"
@@ -749,7 +749,7 @@ def get_student_dashboard(email: str, current_user: dict = Depends(get_current_u
         # ----------------------------------------------------
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select(
                 "id, degree, specialization, "
@@ -781,7 +781,7 @@ def get_student_dashboard(email: str, current_user: dict = Depends(get_current_u
         # ----------------------------------------------------
 
         skills_response = (
-            supabase
+            admin_supabase
             .table("student_skills")
             .select(
                 "id, proficiency, skill_id, "
@@ -819,7 +819,7 @@ def get_student_dashboard(email: str, current_user: dict = Depends(get_current_u
         # ----------------------------------------------------
 
         recommendations_response = (
-            supabase
+            admin_supabase
             .table("career_recommendations")
             .select("id")
             .eq(
@@ -835,7 +835,7 @@ def get_student_dashboard(email: str, current_user: dict = Depends(get_current_u
 
 
         projects_response = (
-            supabase.table("projects")
+            admin_supabase.table("projects")
             .select("id, title")
             .eq("student_id", student_id)
             .execute()
@@ -921,7 +921,7 @@ def get_career_analysis(email: str, current_user: dict = Depends(get_current_use
         # ----------------------------------------------------
 
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select(
                 "id, name, email, role"
@@ -949,7 +949,7 @@ def get_career_analysis(email: str, current_user: dict = Depends(get_current_use
         # ----------------------------------------------------
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select(
                 "id, user_id, degree, specialization, "
@@ -981,7 +981,7 @@ def get_career_analysis(email: str, current_user: dict = Depends(get_current_use
         # ----------------------------------------------------
 
         skills_response = (
-            supabase
+            admin_supabase
             .table("student_skills")
             .select(
                 "id, proficiency, skill_id, "
@@ -1019,7 +1019,7 @@ def get_career_analysis(email: str, current_user: dict = Depends(get_current_use
         # ----------------------------------------------------
 
         projects_response = (
-            supabase
+            admin_supabase
             .table("projects")
             .select(
                 "id, title, description, "
@@ -1040,7 +1040,7 @@ def get_career_analysis(email: str, current_user: dict = Depends(get_current_use
         # ----------------------------------------------------
 
         recommendations_response = (
-            supabase
+            admin_supabase
             .table("career_recommendations")
             .select(
                 "id, match_score, reason, career_role_id"
@@ -1069,7 +1069,7 @@ def get_career_analysis(email: str, current_user: dict = Depends(get_current_use
             if career_role_id:
 
                 career_role_response = (
-                    supabase
+                    admin_supabase
                     .table("career_roles")
                     .select("*")
                     .eq(
@@ -1122,7 +1122,7 @@ def get_career_analysis(email: str, current_user: dict = Depends(get_current_use
         # ----------------------------------------------------
 
         gaps_response = (
-            supabase
+            admin_supabase
             .table("skill_gaps")
             .select(
                 "id, current_level, required_level, "
@@ -1289,7 +1289,7 @@ def get_career_recommendations(email: str, current_user: dict = Depends(get_curr
         # ----------------------------------------------------
 
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select(
                 "id, name, email, role"
@@ -1317,7 +1317,7 @@ def get_career_recommendations(email: str, current_user: dict = Depends(get_curr
         # ----------------------------------------------------
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select(
                 "id, degree, specialization, "
@@ -1352,7 +1352,7 @@ def get_career_recommendations(email: str, current_user: dict = Depends(get_curr
         # We need it for the Strengths section.
 
         skills_response = (
-            supabase
+            admin_supabase
             .table("student_skills")
             .select(
                 "id, proficiency, skill_id, "
@@ -1396,7 +1396,7 @@ def get_career_recommendations(email: str, current_user: dict = Depends(get_curr
         # ----------------------------------------------------
 
         gaps_response = (
-            supabase
+            admin_supabase
             .table("skill_gaps")
             .select(
                 "id, current_level, required_level, "
@@ -1443,7 +1443,7 @@ def get_career_recommendations(email: str, current_user: dict = Depends(get_curr
         # ----------------------------------------------------
 
         recommendations_response = (
-            supabase
+            admin_supabase
             .table("career_recommendations")
             .select(
                 "id, match_score, reason, "
@@ -1483,7 +1483,7 @@ def get_career_recommendations(email: str, current_user: dict = Depends(get_curr
             if career_role_id:
 
                 career_role_response = (
-                    supabase
+                    admin_supabase
                     .table("career_roles")
                     .select("*")
                     .eq(
@@ -1685,7 +1685,7 @@ def get_placement_opportunities(email: str, current_user: dict = Depends(get_cur
         # ----------------------------------------------------
 
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select(
                 "id, name, email, role"
@@ -1713,7 +1713,7 @@ def get_placement_opportunities(email: str, current_user: dict = Depends(get_cur
         # ----------------------------------------------------
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select(
                 "id, degree, specialization, "
@@ -1745,7 +1745,7 @@ def get_placement_opportunities(email: str, current_user: dict = Depends(get_cur
         # ----------------------------------------------------
 
         student_skills_response = (
-            supabase
+            admin_supabase
             .table("student_skills")
             .select(
                 "skill_id, proficiency, "
@@ -1784,7 +1784,7 @@ def get_placement_opportunities(email: str, current_user: dict = Depends(get_cur
         # ----------------------------------------------------
 
         jobs_response = (
-            supabase
+            admin_supabase
             .table("jobs")
             .select("*")
             .order(
@@ -1821,7 +1821,7 @@ def get_placement_opportunities(email: str, current_user: dict = Depends(get_cur
             if company_id:
 
                 company_response = (
-                    supabase
+                    admin_supabase
                     .table("companies")
                     .select("*")
                     .eq(
@@ -1850,7 +1850,7 @@ def get_placement_opportunities(email: str, current_user: dict = Depends(get_cur
             # ------------------------------------------------
 
             required_skills_response = (
-                supabase
+                admin_supabase
                 .table("job_required_skills")
                 .select(
                     "skill_id, required_proficiency, "
@@ -2229,7 +2229,7 @@ def get_job_match_details(
         # ----------------------------------------------------
 
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select("id, name, email, role")
             .eq("email", email)
@@ -2251,7 +2251,7 @@ def get_job_match_details(
         # ----------------------------------------------------
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select(
                 "id, degree, specialization, "
@@ -2278,7 +2278,7 @@ def get_job_match_details(
         # ----------------------------------------------------
 
         job_response = (
-            supabase
+            admin_supabase
             .table("jobs")
             .select("*")
             .eq("id", job_id)
@@ -2306,7 +2306,7 @@ def get_job_match_details(
         if company_id:
 
             company_response = (
-                supabase
+                admin_supabase
                 .table("companies")
                 .select("*")
                 .eq("id", company_id)
@@ -2330,7 +2330,7 @@ def get_job_match_details(
         # ----------------------------------------------------
 
         student_skills_response = (
-            supabase
+            admin_supabase
             .table("student_skills")
             .select(
                 "skill_id, proficiency, "
@@ -2358,7 +2358,7 @@ def get_job_match_details(
         # ----------------------------------------------------
 
         required_skills_response = (
-            supabase
+            admin_supabase
             .table("job_required_skills")
             .select(
                 "skill_id, required_proficiency, "
@@ -2645,7 +2645,7 @@ def get_skill_gaps(email: str, current_user: dict = Depends(get_current_user)):
         # ----------------------------------------------------
 
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select("id, name, email, role")
             .eq("email", email)
@@ -2668,7 +2668,7 @@ def get_skill_gaps(email: str, current_user: dict = Depends(get_current_user)):
         # ----------------------------------------------------
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select(
                 "id, degree, specialization, "
@@ -2697,7 +2697,7 @@ def get_skill_gaps(email: str, current_user: dict = Depends(get_current_user)):
         # ----------------------------------------------------
 
         gaps_response = (
-            supabase
+            admin_supabase
             .table("skill_gaps")
             .select("*")
             .eq("student_id", student_id)
@@ -2726,7 +2726,7 @@ def get_skill_gaps(email: str, current_user: dict = Depends(get_current_user)):
             if skill_id:
 
                 skill_response = (
-                    supabase
+                    admin_supabase
                     .table("skills")
                     .select("id, name")
                     .eq("id", skill_id)
@@ -2935,7 +2935,7 @@ def get_student_roadmap(email: str, current_user: dict = Depends(get_current_use
         # ----------------------------------------------------
 
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select("id, name, email, role")
             .eq("email", email)
@@ -2957,7 +2957,7 @@ def get_student_roadmap(email: str, current_user: dict = Depends(get_current_use
         # ----------------------------------------------------
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select(
                 "id, degree, specialization, "
@@ -2984,7 +2984,7 @@ def get_student_roadmap(email: str, current_user: dict = Depends(get_current_use
         # ----------------------------------------------------
 
         roadmap_response = (
-            supabase
+            admin_supabase
             .table("roadmaps")
             .select("*")
             .eq("student_id", student_id)
@@ -3062,7 +3062,7 @@ def get_student_roadmap(email: str, current_user: dict = Depends(get_current_use
         # ----------------------------------------------------
 
         items_response = (
-            supabase
+            admin_supabase
             .table("roadmap_items")
             .select("*")
             .eq("roadmap_id", roadmap_id)
@@ -3096,7 +3096,7 @@ def get_student_roadmap(email: str, current_user: dict = Depends(get_current_use
             }
 
             (
-                supabase
+                admin_supabase
                 .table("roadmap_items")
                 .update(update_payload)
                 .eq("id", item["id"])
@@ -3115,7 +3115,7 @@ def get_student_roadmap(email: str, current_user: dict = Depends(get_current_use
             for week, plan in personalized_plan.items():
 
                 (
-                    supabase
+                    admin_supabase
                     .table("roadmap_items")
                     .insert({
                         "roadmap_id": roadmap_id,
@@ -3132,7 +3132,7 @@ def get_student_roadmap(email: str, current_user: dict = Depends(get_current_use
         # ----------------------------------------------------
 
         refreshed_items_response = (
-            supabase
+            admin_supabase
             .table("roadmap_items")
             .select("*")
             .eq("roadmap_id", roadmap_id)
@@ -3315,7 +3315,7 @@ def update_roadmap_item_completion(
     request.email = current_user["email"]
     try:
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select("id, email, role")
             .eq("email", request.email)
@@ -3332,7 +3332,7 @@ def update_roadmap_item_completion(
         user = user_response.data[0]
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select("id")
             .eq("user_id", user["id"])
@@ -3349,7 +3349,7 @@ def update_roadmap_item_completion(
         student_id = student_response.data[0]["id"]
 
         roadmap_response = (
-            supabase
+            admin_supabase
             .table("roadmaps")
             .select("id")
             .eq("student_id", student_id)
@@ -3366,7 +3366,7 @@ def update_roadmap_item_completion(
         roadmap_id = roadmap_response.data[0]["id"]
 
         item_response = (
-            supabase
+            admin_supabase
             .table("roadmap_items")
             .select("id, roadmap_id")
             .eq("id", request.item_id)
@@ -3382,7 +3382,7 @@ def update_roadmap_item_completion(
             )
 
         update_response = (
-            supabase
+            admin_supabase
             .table("roadmap_items")
             .update({"completed": request.completed})
             .eq("id", request.item_id)
@@ -3434,7 +3434,7 @@ def create_student_application(
     request.email = current_user["email"]
     try:
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select("id, name, email, role")
             .eq("email", request.email)
@@ -3451,7 +3451,7 @@ def create_student_application(
         user = user_response.data[0]
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select(
                 "id, degree, specialization, "
@@ -3473,7 +3473,7 @@ def create_student_application(
         student_id = student["id"]
 
         job_response = (
-            supabase
+            admin_supabase
             .table("jobs")
             .select("*")
             .eq("id", request.job_id)
@@ -3490,7 +3490,7 @@ def create_student_application(
         job = job_response.data[0]
 
         existing_application_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .select("id, status, applied_at")
             .eq("student_id", student_id)
@@ -3514,7 +3514,7 @@ def create_student_application(
         }
 
         application_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .insert(application_data)
             .execute()
@@ -3565,7 +3565,7 @@ def get_student_applications(email: str, current_user: dict = Depends(get_curren
     email = current_user["email"]
     try:
         user_response = (
-            supabase
+            admin_supabase
             .table("users")
             .select("id, name, email, role")
             .eq("email", email)
@@ -3582,7 +3582,7 @@ def get_student_applications(email: str, current_user: dict = Depends(get_curren
         user = user_response.data[0]
 
         student_response = (
-            supabase
+            admin_supabase
             .table("students")
             .select("id")
             .eq("user_id", user["id"])
@@ -3601,7 +3601,7 @@ def get_student_applications(email: str, current_user: dict = Depends(get_curren
         # Do not order by created_at because the applications
         # table does not contain that column.
         applications_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .select("*")
             .eq("student_id", student_id)
@@ -3617,7 +3617,7 @@ def get_student_applications(email: str, current_user: dict = Depends(get_curren
 
             if job_id:
                 job_response = (
-                    supabase
+                    admin_supabase
                     .table("jobs")
                     .select("*")
                     .eq("id", job_id)
@@ -3632,7 +3632,7 @@ def get_student_applications(email: str, current_user: dict = Depends(get_curren
 
             if job and job.get("company_id"):
                 company_response = (
-                    supabase
+                    admin_supabase
                     .table("companies")
                     .select("*")
                     .eq("id", job["company_id"])
@@ -3723,7 +3723,7 @@ ADMIN_APPLICATION_STATUSES = {
 def get_admin_applications(current_user: dict = Depends(get_current_admin)):
     try:
         applications_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .select("*")
             .execute()
@@ -3743,7 +3743,7 @@ def get_admin_applications(current_user: dict = Depends(get_current_admin)):
 
             if student_id:
                 student_response = (
-                    supabase
+                    admin_supabase
                     .table("students")
                     .select("*")
                     .eq("id", student_id)
@@ -3756,7 +3756,7 @@ def get_admin_applications(current_user: dict = Depends(get_current_admin)):
                     user_id = student.get("user_id")
                     if user_id:
                         user_response = (
-                            supabase
+                            admin_supabase
                             .table("users")
                             .select("id, name, email, role")
                             .eq("id", user_id)
@@ -3768,7 +3768,7 @@ def get_admin_applications(current_user: dict = Depends(get_current_admin)):
 
             if job_id:
                 job_response = (
-                    supabase
+                    admin_supabase
                     .table("jobs")
                     .select("*")
                     .eq("id", job_id)
@@ -3781,7 +3781,7 @@ def get_admin_applications(current_user: dict = Depends(get_current_admin)):
                     company_id = job.get("company_id")
                     if company_id:
                         company_response = (
-                            supabase
+                            admin_supabase
                             .table("companies")
                             .select("*")
                             .eq("id", company_id)
@@ -3877,7 +3877,7 @@ def update_admin_application_status(
             )
 
         existing_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .select("id, status")
             .eq("id", application_id)
@@ -3892,7 +3892,7 @@ def update_admin_application_status(
             )
 
         update_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .update({"status": new_status})
             .eq("id", application_id)
