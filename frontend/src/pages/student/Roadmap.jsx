@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
+import { apiFetch } from '../../services/api'
 
 const API_BASE_URL = 'https://careerpilot-ai-backend-docker.onrender.com'
 
@@ -49,7 +50,7 @@ function Roadmap() {
       const encodedEmail =
         encodeURIComponent(user.email)
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/api/student/roadmap?email=${encodedEmail}`
       )
 
@@ -159,7 +160,7 @@ function Roadmap() {
       // Save completion status through FastAPI
       // --------------------------------------------------------
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/api/student/roadmap-item`,
         {
           method: 'PATCH',
@@ -204,7 +205,7 @@ function Roadmap() {
       // Supabase instead of only changing React state.
       // --------------------------------------------------------
 
-      const verifyResponse = await fetch(
+      const verifyResponse = await apiFetch(
         `${API_BASE_URL}/api/student/roadmap?email=${encodeURIComponent(user.email)}`
       )
 
