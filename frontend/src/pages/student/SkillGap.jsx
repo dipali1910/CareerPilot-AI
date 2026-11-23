@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
+import { apiFetch } from '../../services/api'
 
 const API_BASE_URL = 'https://careerpilot-ai-backend-docker.onrender.com'
 
@@ -35,7 +36,7 @@ function SkillGap() {
       // IMPORTANT:
       // The email comes directly from the current Supabase session.
       // There is NO demo email and NO hardcoded student.
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/api/student/skill-gaps?email=${encodeURIComponent(
           user.email
         )}`
