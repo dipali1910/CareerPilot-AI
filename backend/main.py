@@ -1,7 +1,7 @@
 import os
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client, Client
@@ -36,6 +36,88 @@ admin_supabase: Client = create_client(
     SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY
 )
+
+def get_current_user(authorization: str = Header(...)):
+    """Validate the Supabase access token and return its verified user."""
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(status_code=401, detail="A valid Bearer access token is required.")
+
+    try:
+        response = supabase.auth.get_user(token.strip())
+        auth_user = getattr(response, "user", None)
+        if not auth_user:
+            raise HTTPException(status_code=401, detail="Your session is invalid or expired.")
+
+        user_id = getattr(auth_user, "id", None)
+        email = (getattr(auth_user, "email", None) or "").strip().lower()
+        if not user_id or not email:
+            raise HTTPException(status_code=401, detail="The authenticated account is incomplete.")
+
+        return {
+            "id": str(user_id),
+            "email": email,
+            "user_metadata": getattr(auth_user, "user_metadata", {}) or {},
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Unable to verify your Supabase session.")
+
+
+def get_current_admin(current_user: dict = Depends(get_current_user)):
+    """Require an authenticated account with the admin role."""
+    try:
+        result = (
+            admin_supabase.table("users")
+            .select("id, role")
+            .eq("id", current_user["id"])
+            .limit(1)
+            .execute()
+        )
+        if not result.data or str(result.data[0].get("role", "")).lower() != "admin":
+            raise HTTPException(status_code=403, detail="Administrator access is required.")
+        return current_user
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=403, detail="Unable to verify administrator access.")
+
+
+def calculate_readiness_metrics(student: dict, skills: list, projects: list):
+    """Calculate transparent, profile-specific readiness metrics (0-100)."""
+    proficiency_values = {"beginner": 40, "basic": 40, "intermediate": 70, "advanced": 90, "expert": 100}
+    proficiency_scores = [
+        proficiency_values.get(str(item.get("proficiency") or "").lower(), 50)
+        for item in skills
+    ]
+    technical = round(sum(proficiency_scores) / len(proficiency_scores)) if proficiency_scores else 0
+    project_strength = min(100, len(projects) * 25)
+    role_alignment = 100 if (
+        student.get("target_role") and
+        str(student.get("target_role")).strip().lower() not in {"career preference not detected", "not specified"}
+    ) else 25
+    cgpa = student.get("cgpa")
+    try:
+        education = max(0, min(100, round(float(cgpa) * 10))) if cgpa is not None else 0
+    except (TypeError, ValueError):
+        education = 0
+
+    breakdown = {
+        "technical_skills": technical,
+        "project_strength": project_strength,
+        "role_alignment": role_alignment,
+        "interview_readiness": round((technical * 0.6) + (project_strength * 0.4)),
+        "education": education,
+    }
+    overall = round(
+        technical * 0.40 +
+        project_strength * 0.25 +
+        role_alignment * 0.20 +
+        education * 0.15
+    )
+    return max(0, min(100, overall)), breakdown
+
 
 
 # ============================================================
@@ -96,7 +178,7 @@ def health_check():
 # ============================================================
 
 @app.get("/api/db-test")
-def database_test():
+def database_test(current_user: dict = Depends(get_current_admin)):
 
     try:
 
@@ -131,15 +213,17 @@ async def upload_resume(
     name: str = Form(""),
     auth_user_id: str = Form(...),
     file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
 ):
     """Create/update the application student profile from a PDF resume."""
     try:
-        email = email.strip().lower()
-        name = name.strip()
-        auth_user_id = auth_user_id.strip()
-
-        if not email or not auth_user_id:
-            raise HTTPException(status_code=400, detail="Email and authenticated user ID are required.")
+        email = current_user["email"]
+        auth_user_id = current_user["id"]
+        name = (
+            current_user.get("user_metadata", {}).get("full_name")
+            or current_user.get("user_metadata", {}).get("name")
+            or name.strip()
+        )
 
         filename = (file.filename or "").lower()
         content_type = (file.content_type or "").lower()
@@ -625,8 +709,9 @@ async def upload_resume(
 # ============================================================
 
 @app.get("/api/student/dashboard")
-def get_student_dashboard(email: str):
+def get_student_dashboard(email: str, current_user: dict = Depends(get_current_user)):
 
+    email = current_user["email"]
     try:
 
         # ----------------------------------------------------
@@ -747,11 +832,14 @@ def get_student_dashboard(email: str):
         )
 
 
-        # ----------------------------------------------------
-        # Application-defined readiness score
-        # ----------------------------------------------------
-
-        readiness_score = 82
+        projects_response = (
+            supabase.table("projects")
+            .select("id, title")
+            .eq("student_id", student_id)
+            .execute()
+        )
+        projects = projects_response.data or []
+        readiness_score, _ = calculate_readiness_metrics(student, skills, projects)
 
 
         # ----------------------------------------------------
@@ -821,8 +909,9 @@ def get_student_dashboard(email: str):
 # ============================================================
 
 @app.get("/api/student/career-analysis")
-def get_career_analysis(email: str):
+def get_career_analysis(email: str, current_user: dict = Depends(get_current_user)):
 
+    email = current_user["email"]
     try:
 
         # ----------------------------------------------------
@@ -1079,18 +1168,11 @@ def get_career_analysis(email: str):
         # Readiness
         # ----------------------------------------------------
 
-        readiness_score = 82
-
-        readiness_breakdown = {
-
-            "technical_skills": 84,
-
-            "project_strength": 80,
-
-            "role_alignment": 86,
-
-            "interview_readiness": 78
-        }
+        readiness_score, readiness_breakdown = calculate_readiness_metrics(
+            student,
+            skills,
+            projects
+        )
 
 
         # ----------------------------------------------------
@@ -1195,8 +1277,9 @@ def get_career_analysis(email: str):
 # ============================================================
 
 @app.get("/api/student/career-recommendations")
-def get_career_recommendations(email: str):
+def get_career_recommendations(email: str, current_user: dict = Depends(get_current_user)):
 
+    email = current_user["email"]
     try:
 
         # ----------------------------------------------------
@@ -1590,8 +1673,9 @@ def get_career_recommendations(email: str):
 # ============================================================
 
 @app.get("/api/student/placement-opportunities")
-def get_placement_opportunities(email: str):
+def get_placement_opportunities(email: str, current_user: dict = Depends(get_current_user)):
 
+    email = current_user["email"]
     try:
 
         # ----------------------------------------------------
@@ -2131,9 +2215,11 @@ def get_placement_opportunities(email: str):
 @app.get("/api/student/job-match/{job_id}")
 def get_job_match_details(
     job_id: str,
-    email: str
+    email: str,
+    current_user: dict = Depends(get_current_user)
 ):
 
+    email = current_user["email"]
     try:
 
         # ----------------------------------------------------
@@ -2547,8 +2633,9 @@ def get_job_match_details(
 # ============================================================
 
 @app.get("/api/student/skill-gaps")
-def get_skill_gaps(email: str):
+def get_skill_gaps(email: str, current_user: dict = Depends(get_current_user)):
 
+    email = current_user["email"]
     try:
 
         # ----------------------------------------------------
@@ -2836,8 +2923,9 @@ def get_skill_gaps(email: str):
 # ============================================================
 
 @app.get("/api/student/roadmap")
-def get_student_roadmap(email: str):
+def get_student_roadmap(email: str, current_user: dict = Depends(get_current_user)):
 
+    email = current_user["email"]
     try:
 
         # ----------------------------------------------------
@@ -3219,8 +3307,10 @@ class RoadmapItemCompletion(BaseModel):
 
 @app.patch("/api/student/roadmap-item")
 def update_roadmap_item_completion(
-    request: RoadmapItemCompletion
+    request: RoadmapItemCompletion,
+    current_user: dict = Depends(get_current_user)
 ):
+    request.email = current_user["email"]
     try:
         user_response = (
             supabase
@@ -3336,8 +3426,10 @@ class JobApplicationRequest(BaseModel):
 
 @app.post("/api/student/applications")
 def create_student_application(
-    request: JobApplicationRequest
+    request: JobApplicationRequest,
+    current_user: dict = Depends(get_current_user)
 ):
+    request.email = current_user["email"]
     try:
         user_response = (
             supabase
@@ -3467,7 +3559,8 @@ def create_student_application(
 
 
 @app.get("/api/student/applications")
-def get_student_applications(email: str):
+def get_student_applications(email: str, current_user: dict = Depends(get_current_user)):
+    email = current_user["email"]
     try:
         user_response = (
             supabase
@@ -3625,7 +3718,7 @@ ADMIN_APPLICATION_STATUSES = {
 
 
 @app.get("/api/admin/applications")
-def get_admin_applications():
+def get_admin_applications(current_user: dict = Depends(get_current_admin)):
     try:
         applications_response = (
             supabase
@@ -3767,6 +3860,7 @@ def get_admin_applications():
 def update_admin_application_status(
     application_id: str,
     request: ApplicationStatusUpdate,
+    current_user: dict = Depends(get_current_admin),
 ):
     try:
         new_status = request.status.strip().lower()
