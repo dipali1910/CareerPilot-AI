@@ -339,7 +339,9 @@ async def upload_resume(
 
         import re
 
-        detected_name = name
+        # Prefer the name written in the uploaded resume. The account name is
+        # only a fallback, so each profile reflects its own uploaded document.
+        detected_name = None
         if not detected_name:
             lines = [line.strip() for line in resume_text.splitlines() if line.strip()]
             for line in lines[:8]:
@@ -355,7 +357,7 @@ async def upload_resume(
                     detected_name = line
                     break
         if not detected_name:
-            detected_name = email.split("@")[0].replace(".", " ").replace("_", " ").title()
+            detected_name = name or email.split("@")[0].replace(".", " ").replace("_", " ").title()
 
         graduation_year = first_match([
             r"graduat(?:ion|e)\s*(?:year)?\s*[:\-]?\s*(20\d{2})",
