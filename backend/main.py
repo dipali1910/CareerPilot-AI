@@ -1,7 +1,7 @@
 import os
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from supabase import create_client, Client
@@ -625,195 +625,173 @@ async def upload_resume(
 # ============================================================
 
 @app.get("/api/student/dashboard")
-def get_student_dashboard(email: str):
+def get_student_dashboard(authorization: str = Header(None)):
 
     try:
+        # Verify the signed-in Supabase user from their access token.
+        if not authorization or not authorization.lower().startswith("bearer "):
+            raise HTTPException(status_code=401, detail="Authentication is required.")
 
-        # ----------------------------------------------------
-        # Find user
-        # ----------------------------------------------------
+        access_token = authorization.split(" ", 1)[1].strip()
+        if not access_token:
+            raise HTTPException(status_code=401, detail="Authentication is required.")
 
+        try:
+            auth_response = supabase.auth.get_user(access_token)
+            auth_user = auth_response.user
+        except Exception:
+            auth_user = None
+
+        if not auth_user or not auth_user.id or not auth_user.email:
+            raise HTTPException(status_code=401, detail="Your session is invalid or has expired.")
+
+        auth_user_id = str(auth_user.id)
+        email = auth_user.email.strip().lower()
+        metadata = auth_user.user_metadata or {}
+        full_name = (
+            metadata.get("full_name")
+            or metadata.get("name")
+            or email.split("@")[0].replace(".", " ").replace("_", " ").title()
+        )
+
+        # Create the application user row on first dashboard visit.
         user_response = (
-            supabase
-            .table("users")
-            .select(
-                "id, name, email, role"
-            )
-            .eq(
-                "email",
-                email
-            )
+            admin_supabase.table("users")
+            .select("id, name, email, role")
+            .eq("id", auth_user_id)
             .limit(1)
             .execute()
         )
 
-        if not user_response.data:
-
-            raise HTTPException(
-                status_code=404,
-                detail="Student user not found."
+        if user_response.data:
+            user = user_response.data[0]
+        else:
+            existing_email = (
+                admin_supabase.table("users")
+                .select("id, name, email, role")
+                .eq("email", email)
+                .limit(1)
+                .execute()
             )
 
-        user = user_response.data[0]
+            if existing_email.data:
+                existing_user = existing_email.data[0]
+                if str(existing_user.get("id")) != auth_user_id:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="This email is already linked to another application user."
+                    )
+                user = existing_user
+            else:
+                created_user = (
+                    admin_supabase.table("users")
+                    .insert({
+                        "id": auth_user_id,
+                        "name": full_name,
+                        "email": email,
+                        "role": "student",
+                    })
+                    .execute()
+                )
+                if not created_user.data:
+                    raise HTTPException(status_code=500, detail="Student account could not be initialized.")
+                user = created_user.data[0]
 
-
-        # ----------------------------------------------------
-        # Find student
-        # ----------------------------------------------------
-
+        # Create an empty student profile. Profile fields remain NULL until
+        # the student uploads a resume or completes their profile.
         student_response = (
-            supabase
-            .table("students")
+            admin_supabase.table("students")
             .select(
-                "id, degree, specialization, "
-                "graduation_year, cgpa, location, "
+                "id, degree, specialization, graduation_year, cgpa, location, "
                 "target_role, career_interest"
             )
-            .eq(
-                "user_id",
-                user["id"]
-            )
+            .eq("user_id", auth_user_id)
             .limit(1)
             .execute()
         )
 
-        if not student_response.data:
-
-            raise HTTPException(
-                status_code=404,
-                detail="Student profile not found."
+        if student_response.data:
+            student = student_response.data[0]
+        else:
+            created_student = (
+                admin_supabase.table("students")
+                .insert({
+                    "user_id": auth_user_id,
+                    "degree": None,
+                    "specialization": None,
+                    "graduation_year": None,
+                    "cgpa": None,
+                    "location": None,
+                    "target_role": None,
+                    "career_interest": None,
+                })
+                .execute()
             )
-
-        student = student_response.data[0]
+            if not created_student.data:
+                raise HTTPException(status_code=500, detail="Student profile could not be initialized.")
+            student = created_student.data[0]
 
         student_id = student["id"]
 
-
-        # ----------------------------------------------------
-        # Get student skills
-        # ----------------------------------------------------
-
         skills_response = (
-            supabase
-            .table("student_skills")
-            .select(
-                "id, proficiency, skill_id, "
-                "skills(id, name)"
-            )
-            .eq(
-                "student_id",
-                student_id
-            )
+            supabase.table("student_skills")
+            .select("id, proficiency, skill_id, skills(id, name)")
+            .eq("student_id", student_id)
             .execute()
         )
 
         skills = []
-
         for item in skills_response.data or []:
-
             skill = item.get("skills")
-
             if skill:
-
                 skills.append({
-
                     "id": skill.get("id"),
-
                     "name": skill.get("name"),
-
-                    "proficiency": item.get(
-                        "proficiency"
-                    )
+                    "proficiency": item.get("proficiency"),
                 })
 
-
-        # ----------------------------------------------------
-        # Career recommendation count
-        # ----------------------------------------------------
-
         recommendations_response = (
-            supabase
-            .table("career_recommendations")
+            supabase.table("career_recommendations")
             .select("id")
-            .eq(
-                "student_id",
-                student_id
-            )
+            .eq("student_id", student_id)
             .execute()
         )
+        career_matches = len(recommendations_response.data or [])
 
-        career_matches = len(
-            recommendations_response.data or []
+        has_profile_data = any(
+            student.get(field) not in (None, "")
+            for field in (
+                "degree", "specialization", "graduation_year",
+                "cgpa", "location", "target_role", "career_interest"
+            )
         )
-
-
-        # ----------------------------------------------------
-        # Application-defined readiness score
-        # ----------------------------------------------------
-
-        readiness_score = 82
-
-
-        # ----------------------------------------------------
-        # Return dashboard
-        # ----------------------------------------------------
 
         return {
-
             "status": "success",
-
             "student": {
-
                 "id": student_id,
-
-                "name": user["name"],
-
-                "email": user["email"],
-
-                "degree": student["degree"],
-
-                "specialization": student[
-                    "specialization"
-                ],
-
-                "graduation_year": student[
-                    "graduation_year"
-                ],
-
-                "cgpa": student["cgpa"],
-
-                "location": student["location"],
-
-                "target_role": student[
-                    "target_role"
-                ],
-
-                "career_interest": student[
-                    "career_interest"
-                ]
+                "name": user.get("name") or full_name,
+                "email": user.get("email") or email,
+                "degree": student.get("degree"),
+                "specialization": student.get("specialization"),
+                "graduation_year": student.get("graduation_year"),
+                "cgpa": student.get("cgpa"),
+                "location": student.get("location"),
+                "target_role": student.get("target_role"),
+                "career_interest": student.get("career_interest"),
             },
-
-            "readiness_score": readiness_score,
-
+            "profile_completed": has_profile_data,
+            "readiness_score": 82 if has_profile_data else 0,
             "skills": skills,
-
             "skill_count": len(skills),
-
-            "career_matches": career_matches
+            "career_matches": career_matches,
         }
 
-
     except HTTPException:
-
         raise
-
-
     except Exception as e:
-
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
+        print("STUDENT DASHBOARD ERROR:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================
