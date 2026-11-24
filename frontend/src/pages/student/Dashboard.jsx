@@ -11,12 +11,12 @@ const API_BASE_URL = 'https://careerpilot-ai-backend-docker.onrender.com'
  * can temporarily return 500 errors, so we retry them instead
  * of allowing one failed request to break the entire Dashboard.
  */
-async function fetchJson(path, fallback = null, retries = 2) {
+async function fetchJson(path, fallback = null, retries = 2, headers = {}) {
   let lastError = null
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
-      const response = await fetch(`${API_BASE_URL}${path}`)
+      const response = await fetch(`${API_BASE_URL}${path}`, { headers })
 
       if (!response.ok) {
         throw new Error(
@@ -74,16 +74,19 @@ function Dashboard() {
         setError('')
 
         const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser()
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession()
 
-        if (authError || !user?.email) {
+        if (sessionError || !session?.user?.email || !session?.access_token) {
           navigate('/login')
           return
         }
 
-        const encodedEmail = encodeURIComponent(user.email)
+        const encodedEmail = encodeURIComponent(session.user.email)
+        const authHeaders = {
+          Authorization: `Bearer ${session.access_token}`,
+        }
 
 
         /*
@@ -95,9 +98,10 @@ function Dashboard() {
          * Dashboard itself to load.
          */
         const dashboardData = await fetchJson(
-          `/api/student/dashboard?email=${encodedEmail}`,
+          '/api/student/dashboard',
           null,
-          3
+          3,
+          authHeaders
         )
 
 
