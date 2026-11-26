@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { supabase } from '../../services/supabase'
 
 const API_BASE_URL = 'https://careerpilot-ai-backend-docker.onrender.com'
 
@@ -19,18 +20,59 @@ function AdminApplications() {
   const [successMessage, setSuccessMessage] = useState('')
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [accessToken, setAccessToken] = useState('')
+  const navigate = useNavigate()
 
   useEffect(() => {
-    fetchApplications()
-  }, [])
+    let active = true
 
-  const fetchApplications = async () => {
+    const verifyAdminAndLoad = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+
+        if (!session?.user || !session.access_token) {
+          navigate('/login', { replace: true })
+          return
+        }
+
+        const { data: profile, error: profileError } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', session.user.id)
+          .maybeSingle()
+
+        if (profileError || !profile || String(profile.role).toLowerCase() !== 'admin') {
+          await supabase.auth.signOut()
+          navigate('/login', { replace: true })
+          return
+        }
+
+        if (active) {
+          setAccessToken(session.access_token)
+          fetchApplications(session.access_token)
+        }
+      } catch (authError) {
+        console.error('Admin access verification failed:', authError)
+        navigate('/login', { replace: true })
+      }
+    }
+
+    verifyAdminAndLoad()
+    return () => { active = false }
+  }, [navigate])
+
+  const fetchApplications = async (token = accessToken) => {
     try {
       setLoading(true)
       setError('')
 
       const response = await fetch(
-        `${API_BASE_URL}/api/admin/applications`
+        `${API_BASE_URL}/api/admin/applications`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       )
 
       const data = await response.json()
@@ -68,6 +110,7 @@ function AdminApplications() {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({ status }),
         }
