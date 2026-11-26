@@ -37,6 +37,40 @@ admin_supabase: Client = create_client(
     SUPABASE_SERVICE_ROLE_KEY
 )
 
+ 
+def require_admin(authorization: str):
+    """Validate the Supabase access token and require an admin profile."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Authentication is required.")
+
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication token is missing.")
+
+    try:
+        auth_response = supabase.auth.get_user(token)
+        auth_user = getattr(auth_response, "user", None)
+        if not auth_user:
+            raise HTTPException(status_code=401, detail="Invalid or expired session.")
+
+        profile_response = (
+            admin_supabase.table("users")
+            .select("id, role")
+            .eq("id", str(auth_user.id))
+            .limit(1)
+            .execute()
+        )
+        profile = profile_response.data[0] if profile_response.data else None
+
+        if not profile or str(profile.get("role", "")).lower() != "admin":
+            raise HTTPException(status_code=403, detail="Administrator access is required.")
+
+        return auth_user
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Unable to verify the current session.")
+
 
 # ============================================================
 # FASTAPI APPLICATION
@@ -3603,10 +3637,11 @@ ADMIN_APPLICATION_STATUSES = {
 
 
 @app.get("/api/admin/applications")
-def get_admin_applications():
+def get_admin_applications(authorization: str = Header(None)):
+    require_admin(authorization)
     try:
         applications_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .select("*")
             .execute()
@@ -3626,7 +3661,7 @@ def get_admin_applications():
 
             if student_id:
                 student_response = (
-                    supabase
+                    admin_supabase
                     .table("students")
                     .select("*")
                     .eq("id", student_id)
@@ -3639,7 +3674,7 @@ def get_admin_applications():
                     user_id = student.get("user_id")
                     if user_id:
                         user_response = (
-                            supabase
+                            admin_supabase
                             .table("users")
                             .select("id, name, email, role")
                             .eq("id", user_id)
@@ -3651,7 +3686,7 @@ def get_admin_applications():
 
             if job_id:
                 job_response = (
-                    supabase
+                    admin_supabase
                     .table("jobs")
                     .select("*")
                     .eq("id", job_id)
@@ -3664,7 +3699,7 @@ def get_admin_applications():
                     company_id = job.get("company_id")
                     if company_id:
                         company_response = (
-                            supabase
+                            admin_supabase
                             .table("companies")
                             .select("*")
                             .eq("id", company_id)
@@ -3745,7 +3780,9 @@ def get_admin_applications():
 def update_admin_application_status(
     application_id: str,
     request: ApplicationStatusUpdate,
+    authorization: str = Header(None),
 ):
+    require_admin(authorization)
     try:
         new_status = request.status.strip().lower()
 
@@ -3759,7 +3796,7 @@ def update_admin_application_status(
             )
 
         existing_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .select("id, status")
             .eq("id", application_id)
@@ -3774,7 +3811,7 @@ def update_admin_application_status(
             )
 
         update_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .update({"status": new_status})
             .eq("id", application_id)

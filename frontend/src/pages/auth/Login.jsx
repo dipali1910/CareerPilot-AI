@@ -28,7 +28,29 @@ function Login() {
     }
 
     if (data.user) {
-      navigate('/dashboard')
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', data.user.id)
+        .maybeSingle()
+
+      if (profileError || !profile) {
+        await supabase.auth.signOut()
+        setError('Your account profile was not found. Please contact the administrator.')
+        setLoading(false)
+        return
+      }
+
+      const role = String(profile.role || '').toLowerCase()
+
+      if (role === 'admin') {
+        navigate('/admin/applications', { replace: true })
+      } else if (role === 'student') {
+        navigate('/dashboard', { replace: true })
+      } else {
+        await supabase.auth.signOut()
+        setError('This account does not have an authorised role.')
+      }
     }
 
     setLoading(false)
