@@ -3674,7 +3674,7 @@ def get_admin_applications(authorization: str = Header(None)):
                     user_id = student.get("user_id")
                     if user_id:
                         user_response = (
-                            supabase
+                            admin_supabase
                             .table("users")
                             .select("id, name, email, role")
                             .eq("id", user_id)
@@ -3699,7 +3699,7 @@ def get_admin_applications(authorization: str = Header(None)):
                     company_id = job.get("company_id")
                     if company_id:
                         company_response = (
-                            supabase
+                            admin_supabase
                             .table("companies")
                             .select("*")
                             .eq("id", company_id)
