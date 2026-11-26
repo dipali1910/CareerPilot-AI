@@ -3641,7 +3641,7 @@ def get_admin_applications(authorization: str = Header(None)):
     require_admin(authorization)
     try:
         applications_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .select("*")
             .execute()
@@ -3661,7 +3661,7 @@ def get_admin_applications(authorization: str = Header(None)):
 
             if student_id:
                 student_response = (
-                    supabase
+                    admin_supabase
                     .table("students")
                     .select("*")
                     .eq("id", student_id)
@@ -3686,7 +3686,7 @@ def get_admin_applications(authorization: str = Header(None)):
 
             if job_id:
                 job_response = (
-                    supabase
+                    admin_supabase
                     .table("jobs")
                     .select("*")
                     .eq("id", job_id)
@@ -3796,7 +3796,7 @@ def update_admin_application_status(
             )
 
         existing_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .select("id, status")
             .eq("id", application_id)
@@ -3811,7 +3811,7 @@ def update_admin_application_status(
             )
 
         update_response = (
-            supabase
+            admin_supabase
             .table("applications")
             .update({"status": new_status})
             .eq("id", application_id)
